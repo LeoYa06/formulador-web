@@ -30,6 +30,7 @@ google-generativeai==0.8.5
 googleapis-common-protos==1.70.0
 grpcio==1.73.1
 grpcio-status==1.71.2
+gunicorn==23.0.0
 httplib2==0.22.0
 idna==3.10
 isosurfaces==0.1.2
@@ -88,3 +89,4 @@ urllib3==2.5.0
 virtualenv==20.28.1
 watchdog==6.0.0
 Werkzeug==3.1.3
+psycopg2-binary==3.1.10
