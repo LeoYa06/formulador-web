@@ -40,7 +40,6 @@
         .chat-message { margin-bottom: 10px; padding: 8px 12px; border-radius: 18px; max-width: 80%; }
         .user-message { background-color: #007bff; color: white; align-self: flex-end; margin-left: auto; }
         .bot-message { background-color: #e9ecef; color: #333; align-self: flex-start; }
-        #analysis-container { margin-top: 1em; background-color: #f0f8ff; padding: 1em; border-radius: 8px; display: none; border: 1px solid #cfe2f3;}
     </style>
 </head>
 <body>
@@ -84,15 +83,7 @@
                 </form>
 
                 <h3>Resultados del Cálculo</h3>
-                <div id="results-display">
-                    <!-- Los resultados se llenarán con JS -->
-                </div>
-                
-                <!-- Contenedor para el análisis de la IA -->
-                <div id="analysis-container">
-                    <h3>Análisis de la IA</h3>
-                    <div id="analysis-result"></div>
-                </div>
+                <div id="results-display"></div>
             </div>
         </div>
     </div>
@@ -121,8 +112,6 @@
         const chatForm = document.getElementById('chat-form');
         const chatInput = document.getElementById('chat-input');
         const chatHistory = document.getElementById('chat-history');
-        const analysisContainer = document.getElementById('analysis-container');
-        const analysisResult = document.getElementById('analysis-result');
         
         let currentFormulaId = null;
         let currentlyEditingIngredientId = null;
@@ -157,11 +146,18 @@
 
             (details.ingredients || []).forEach(ing => {
                 const row = ingredientsTableBody.insertRow();
-                row.innerHTML = `<td>${ing.name}</td><td>${ing.original_qty_display} ${ing.original_unit}</td><td>${ing.kg_total.toFixed(3)}</td><td>${(ing.costo_linea || 0).toFixed(2)}</td><td class="actions-cell"></td>`;
+                row.innerHTML = `
+                    <td>${ing.name}</td>
+                    <td>${ing.original_qty_display} ${ing.original_unit}</td>
+                    <td>${ing.kg_total.toFixed(3)}</td>
+                    <td>${(ing.costo_linea || 0).toFixed(2)}</td>
+                    <td class="actions-cell"></td>`;
+                
                 const editBtn = document.createElement('button');
                 editBtn.textContent = 'Editar';
                 editBtn.className = 'btn-edit';
                 editBtn.onclick = () => populateFormForEdit(ing);
+                
                 const deleteBtn = document.createElement('button');
                 deleteBtn.textContent = 'Eliminar';
                 deleteBtn.className = 'btn-delete';
@@ -187,11 +183,7 @@
                 <hr>
                 <p><strong>Ratio Agua/Proteína:</strong> ${totals.aw_fp_ratio_str || 'N/A'}</p>
                 <p><strong>Ratio Grasa/Proteína:</strong> ${totals.af_fp_ratio_str || 'N/A'}</p>
-                <div style="text-align: center; margin-top: 1em;">
-                    <button id="analyze-formula-btn" class="btn-success">Analizar Fórmula ✨</button>
-                </div>
             `;
-            document.getElementById('analyze-formula-btn').addEventListener('click', analyzeFormula);
             detailsPanel.style.display = 'block';
         }
         
@@ -211,22 +203,9 @@
                 document.querySelectorAll('#lista-formulas li').forEach(li => li.classList.remove('selected'));
                 item.classList.add('selected');
                 currentFormulaId = formula.id;
-                analysisContainer.style.display = 'none';
                 fetch('/api/formula/' + formula.id).then(res => res.json()).then(data => updateDetailsView(data));
             });
             formulaList.appendChild(item);
-        }
-
-        function analyzeFormula() {
-            if (!currentFormulaId) return;
-            analysisContainer.style.display = 'block';
-            analysisResult.innerHTML = '<p>Analizando, por favor espere...</p>';
-            fetch(`/api/formula/${currentFormulaId}/analyze`, { method: 'POST' })
-                .then(res => res.json())
-                .then(data => {
-                    let htmlResponse = data.analysis.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
-                    analysisResult.innerHTML = htmlResponse;
-                });
         }
 
         document.getElementById('add-formula-form').addEventListener('submit', function(event) {
@@ -249,26 +228,50 @@
 
         ingredientForm.addEventListener('submit', function(event) {
             event.preventDefault();
-            const ingredientData = { name: ingNameInput.value.trim(), quantity: document.getElementById('ing-qty').value, unit: document.getElementById('ing-unit').value };
-            let url = currentlyEditingIngredientId ? `/api/ingredient/${currentlyEditingIngredientId}/update` : `/api/formula/${currentFormulaId}/ingredients/add`;
-            fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ingredientData) })
-                .then(res => res.json()).then(result => { updateDetailsView(result); resetIngredientForm(); });
+            const ingredientData = {
+                name: document.getElementById('ing-name').value.trim(),
+                quantity: document.getElementById('ing-qty').value,
+                unit: document.getElementById('ing-unit').value
+            };
+            let url;
+            if (currentlyEditingIngredientId) {
+                url = `/api/ingredient/${currentlyEditingIngredientId}/update`;
+            } else {
+                url = `/api/formula/${currentFormulaId}/ingredients/add`;
+            }
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(ingredientData)
+            }).then(res => res.json()).then(result => {
+                updateDetailsView(result);
+                resetIngredientForm();
+            });
         });
 
         cancelEditBtn.addEventListener('click', resetIngredientForm);
         
+        // --- LÓGICA DE AUTOCOMPLETADO DE INGREDIENTES ---
         ingNameInput.addEventListener('input', function() {
             const query = this.value;
-            if (!query || query.length < 2) { autocompleteList.innerHTML = ''; return; }
-            fetch(`/api/ingredients/search?q=${query}`).then(response => response.json()).then(data => {
+            if (!query || query.length < 2) {
                 autocompleteList.innerHTML = '';
-                data.forEach(name => {
-                    const suggestionDiv = document.createElement('div');
-                    suggestionDiv.textContent = name;
-                    suggestionDiv.addEventListener('click', function() { ingNameInput.value = this.textContent; autocompleteList.innerHTML = ''; });
-                    autocompleteList.appendChild(suggestionDiv);
+                return;
+            }
+            fetch(`/api/ingredients/search?q=${query}`)
+                .then(response => response.json())
+                .then(data => {
+                    autocompleteList.innerHTML = '';
+                    data.forEach(name => {
+                        const suggestionDiv = document.createElement('div');
+                        suggestionDiv.textContent = name;
+                        suggestionDiv.addEventListener('click', function() {
+                            ingNameInput.value = this.textContent;
+                            autocompleteList.innerHTML = '';
+                        });
+                        autocompleteList.appendChild(suggestionDiv);
+                    });
                 });
-            });
         });
 
         // --- LÓGICA DEL CHATBOT ---
@@ -282,8 +285,11 @@
             if (!userQuestion) return;
             appendMessage(userQuestion, 'user-message');
             chatInput.value = '';
-            fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: userQuestion }) })
-                .then(res => res.json()).then(data => appendMessage(data.answer, 'bot-message'));
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question: userQuestion })
+            }).then(res => res.json()).then(data => appendMessage(data.answer, 'bot-message'));
         });
 
         function appendMessage(text, className) {
