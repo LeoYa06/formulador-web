@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Bibliografía</title>
+    <style>
+        body { font-family: sans-serif; padding: 2em; max-width: 1200px; margin: auto; }
+        h1, h2 { color: #333; }
+        nav a { text-decoration: none; color: #007bff; font-weight: bold; margin: 0 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 2em; table-layout: fixed; }
+        th, td { border: 1px solid #ddd; padding: 8px; vertical-align: top; word-wrap: break-word; }
+        th { background-color: #f2f2f2; }
+        #form-container { margin-top: 2em; padding: 1.5em; border: 1px solid #ccc; border-radius: 8px; background-color: #f9f9f9; }
+        #bibliografia-form input, #bibliografia-form select, #bibliografia-form textarea, #bibliografia-form button { width: 100%; padding: 10px; margin-bottom: 10px; box-sizing: border-box; }
+        textarea { height: 150px; resize: vertical; }
+        .btn { color: white; border: none; cursor: pointer; border-radius: 4px; }
+        .btn-primary { background-color: #007bff; }
+        .btn-success { background-color: #28a745; }
+        .btn-secondary { background-color: #6c757d; }
+        .btn-edit { background-color: #28a745; margin-right: 5px; }
+        .btn-delete { background-color: #dc3545; }
+    </style>
+</head>
+<body>
+    <nav>
+    <a href="/">Formulador</a> |
+    <a href="/biblioteca">Biblioteca</a> |
+    <a href="/gestion_ingredientes">Gestión de Ingredientes</a> |
+    <a href="/gestion_bibliografia">Gestión de Bibliografía</a>
+</nav>
+    <hr>
+
+    <h1>Gestión de Bibliografía</h1>
+
+    <div id="form-container">
+        <h2 id="form-title">Añadir Nueva Referencia</h2>
+        <form id="bibliografia-form">
+            <input type="text" id="form-titulo" placeholder="Título" required>
+            <select id="form-tipo">
+                <option value="Normativa">Normativa</option>
+                <option value="Libro">Libro</option>
+                <option value="Articulo Web">Artículo Web</option>
+                <option value="Referencia Teorica">Referencia Teórica</option>
+            </select>
+            <textarea id="form-contenido" placeholder="Contenido o resumen..." required></textarea>
+            <button type="submit" id="submit-btn" class="btn btn-primary">Guardar</button>
+            <button type="button" id="cancel-btn" class="btn btn-secondary" style="display: none;">Cancelar</button>
+        </form>
+    </div>
+
+    <h2>Referencias Existentes</h2>
+    <table id="bibliografia-table">
+        <thead>
+            <tr>
+                <th style="width: 20%;">Título</th>
+                <th style="width: 15%;">Tipo</th>
+                <th style="width: 55%;">Contenido</th>
+                <th style="width: 10%;">Acciones</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        const tableBody = document.querySelector("#bibliografia-table tbody");
+        const biblioForm = document.getElementById('bibliografia-form');
+        const formTitle = document.getElementById('form-title');
+        const submitBtn = document.getElementById('submit-btn');
+        const cancelBtn = document.getElementById('cancel-btn');
+        let currentlyEditingId = null;
+
+        function populateFormForEdit(entry) {
+            currentlyEditingId = entry.id;
+            formTitle.textContent = `Editando: ${entry.titulo}`;
+            document.getElementById('form-titulo').value = entry.titulo;
+            document.getElementById('form-tipo').value = entry.tipo;
+            document.getElementById('form-contenido').value = entry.contenido;
+            submitBtn.textContent = 'Actualizar';
+            submitBtn.className = 'btn btn-success';
+            cancelBtn.style.display = 'inline-block';
+        }
+
+        function resetForm() {
+            currentlyEditingId = null;
+            formTitle.textContent = 'Añadir Nueva Referencia';
+            biblioForm.reset();
+            submitBtn.textContent = 'Guardar';
+            submitBtn.className = 'btn btn-primary';
+            cancelBtn.style.display = 'none';
+        }
+
+        function addActionsToRow(row, entry) {
+            const actionsCell = row.insertCell(-1);
+            const editButton = document.createElement('button');
+            editButton.className = 'btn btn-edit';
+            editButton.textContent = 'Editar';
+            editButton.onclick = () => populateFormForEdit(entry);
+
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'btn btn-delete';
+            deleteButton.textContent = 'Eliminar';
+            deleteButton.onclick = () => deleteEntry(entry.id, entry.titulo);
+
+            actionsCell.appendChild(editButton);
+            actionsCell.appendChild(deleteButton);
+        }
+
+        function loadBiblioTable() {
+            fetch('/api/bibliografia')
+                .then(res => res.json())
+                .then(data => {
+                    tableBody.innerHTML = '';
+                    data.forEach(entry => {
+                        const row = tableBody.insertRow();
+                        row.dataset.id = entry.id;
+                        row.innerHTML = `<td>${entry.titulo}</td><td>${entry.tipo}</td><td>${entry.contenido}</td>`;
+                        addActionsToRow(row, entry);
+                    });
+                });
+        }
+
+        function deleteEntry(id, titulo) {
+            if (!confirm(`¿Estás seguro de que quieres eliminar "${titulo}"?`)) return;
+            fetch(`/api/bibliografia/${id}/delete`, { method: 'POST' })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.success) {
+                        tableBody.querySelector(`tr[data-id='${id}']`).remove();
+                    } else {
+                        alert('Error: ' + result.error);
+                    }
+                });
+        }
+
+        biblioForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const entryData = {
+                titulo: document.getElementById('form-titulo').value,
+                tipo: document.getElementById('form-tipo').value,
+                contenido: document.getElementById('form-contenido').value,
+            };
+
+            let url;
+            if (currentlyEditingId) {
+                url = `/api/bibliografia/${currentlyEditingId}/update`;
+            } else {
+                url = '/api/bibliografia/add';
+            }
+
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(entryData)
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    loadBiblioTable(); // Recargar toda la tabla es lo más fácil
+                    resetForm();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            });
+        });
+
+        cancelBtn.addEventListener('click', resetForm);
+        window.onload = loadBiblioTable;
+    </script>
+</body>
+</html>

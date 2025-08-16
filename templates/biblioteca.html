@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Biblioteca de Referencias</title>
+    <style>
+        body { font-family: sans-serif; padding: 2em; max-width: 900px; margin: auto; }
+        h1 { color: #333; }
+        nav a { text-decoration: none; color: #007bff; font-weight: bold; margin: 0 10px; }
+        #search-box {
+            width: 100%;
+            padding: 12px;
+            margin: 2em 0;
+            box-sizing: border-box;
+            font-size: 1.1em;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .entry {
+            border: 1px solid #eee;
+            padding: 1.5em;
+            margin-bottom: 1.5em;
+            border-radius: 8px;
+            background-color: #fdfdfd;
+        }
+        .entry h2 { margin-top: 0; }
+        .entry-type {
+            display: inline-block;
+            padding: 4px 8px;
+            background-color: #e9ecef;
+            color: #495057;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-bottom: 1em;
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <a href="/">Formulador</a> |
+        <a href="/biblioteca">Biblioteca</a> |
+        <a href="/gestion_ingredientes">Gestión de Ingredientes</a> |
+        <a href="/gestion_bibliografia">Gestión de Bibliografía</a>
+    </nav>
+    <hr>
+
+    <h1>Biblioteca de Referencias</h1>
+    <input type="text" id="search-box" placeholder="Buscar en la biblioteca...">
+
+    <div id="entries-container">
+        </div>
+
+    <script>
+        const searchBox = document.getElementById('search-box');
+        const entriesContainer = document.getElementById('entries-container');
+        let allEntries = []; // Guardaremos todas las entradas aquí para filtrar
+
+        // --- FUNCIÓN PARA MOSTRAR LAS ENTRADAS ---
+        function displayEntries(entriesToDisplay) {
+            entriesContainer.innerHTML = ''; // Limpiar
+            if (entriesToDisplay.length === 0) {
+                entriesContainer.innerHTML = '<p>No se encontraron resultados.</p>';
+                return;
+            }
+            entriesToDisplay.forEach(entry => {
+                const entryDiv = document.createElement('div');
+                entryDiv.className = 'entry';
+                entryDiv.innerHTML = `
+                    <span class="entry-type">${entry.tipo}</span>
+                    <h2>${entry.titulo}</h2>
+                    <p>${entry.contenido.replace(/\n/g, '<br>')}</p>
+                `;
+                entriesContainer.appendChild(entryDiv);
+            });
+        }
+
+        // --- CARGA INICIAL DE DATOS ---
+        window.onload = function() {
+            fetch('/api/bibliografia')
+                .then(res => res.json())
+                .then(data => {
+                    allEntries = data; // Guardar los datos originales
+                    displayEntries(allEntries); // Mostrar todos al principio
+                })
+                .catch(error => console.error('Error al cargar la bibliografía:', error));
+        };
+
+        // --- MANEJADOR DE LA BÚSQUEDA ---
+        searchBox.addEventListener('input', function() {
+            const query = this.value.toLowerCase();
+            if (!query) {
+                displayEntries(allEntries); // Si la búsqueda está vacía, mostrar todo
+                return;
+            }
+            const filteredEntries = allEntries.filter(entry => {
+                const titleMatch = entry.titulo.toLowerCase().includes(query);
+
+                const contentMatch = entry.contenido.toLowerCase().includes(query);
+                return titleMatch || contentMatch;
+            });
+            displayEntries(filteredEntries);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Formulador de Embutidos</title>
+    <style>
+        body { font-family: sans-serif; padding: 2em; max-width: 900px; margin: auto; background-color: #f9f9f9; }
+        h1, h2, h3 { color: #333; }
+        nav a { text-decoration: none; color: #007bff; font-weight: bold; margin: 0 10px; }
+        .container { display: flex; gap: 2em; align-items: flex-start; }
+        .left-panel { flex: 1; background-color: white; padding: 1em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.05); }
+        .right-panel { flex: 2; }
+        ul { list-style-type: none; padding: 0; }
+        li { padding: 8px; border-bottom: 1px solid #ccc; border-radius: 4px; margin-bottom: 5px; }
+        li:hover, li.selected { background-color: #e0eafc; cursor: pointer; }
+        form { margin-top: 1em; padding: 1em; border: 1px solid #ddd; border-radius: 5px; background-color: #fafafa;}
+        input, select, button { padding: 8px; margin: 2px; border: 1px solid #ccc; border-radius: 4px; }
+        button { color: white; border: none; cursor: pointer; }
+        .btn-primary { background-color: #007bff; }
+        .btn-success { background-color: #28a745; }
+        .btn-secondary { background-color: #6c757d; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1em; background-color: white; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .actions-cell { display: flex; gap: 5px; }
+        #details-panel { display: none; background-color: white; padding: 1em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.05); }
+        .autocomplete { position: relative; display: inline-block; }
+        .autocomplete-items { position: absolute; border: 1px solid #d4d4d4; z-index: 99; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; }
+        .autocomplete-items div { padding: 10px; cursor: pointer; background-color: #fff; border-bottom: 1px solid #d4d4d4; }
+        .autocomplete-items div:hover { background-color: #e9e9e9; }
+        .btn-edit, .btn-delete { padding: 5px 10px; color: white; border: none; cursor: pointer; border-radius: 4px; margin-right: 5px; }
+        .btn-edit { background-color: #28a745; }
+        .btn-delete { background-color: #dc3545; }
+        #chat-bubble { position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; background-color: #007bff; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.2); z-index: 1000; }
+        #chat-window { display: none; position: fixed; bottom: 90px; right: 20px; width: 350px; height: 500px; border: 1px solid #ccc; border-radius: 10px; background-color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.2); flex-direction: column; z-index: 1000; }
+        #chat-history { flex-grow: 1; padding: 10px; overflow-y: auto; display: flex; flex-direction: column;}
+        #chat-form { display: flex; padding: 10px; border-top: 1px solid #eee; }
+        #chat-input { flex-grow: 1; border: 1px solid #ccc; border-radius: 4px; padding: 8px; }
+        .chat-message { margin-bottom: 10px; padding: 8px 12px; border-radius: 18px; max-width: 80%; }
+        .user-message { background-color: #007bff; color: white; align-self: flex-end; margin-left: auto; }
+        .bot-message { background-color: #e9ecef; color: #333; align-self: flex-start; }
+        #analysis-container { margin-top: 1em; background-color: #f0f8ff; padding: 1em; border-radius: 8px; display: none; border: 1px solid #cfe2f3;}
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/">Formulador</a> |
+        <a href="/biblioteca">Biblioteca</a> |
+        <a href="/gestion_ingredientes">Gestión de Ingredientes</a> |
+        <a href="/gestion_bibliografia">Gestión de Bibliografía</a>
+    </nav>
+    <hr>
+
+    <div class="container">
+        <div class="left-panel">
+            <h2>Mis Fórmulas</h2>
+            <ul id="lista-formulas"></ul>
+            <form id="add-formula-form">
+                <input type="text" id="product-name-input" placeholder="Nombre del producto" required>
+                <button type="submit" class="btn-primary">Añadir</button>
+            </form>
+        </div>
+
+        <div class="right-panel">
+            <div id="details-panel">
+                <h2 id="formula-name-display"></h2>
+                <h3>Ingredientes</h3>
+                <table id="ingredients-table">
+                    <thead><tr><th>Nombre</th><th>Cantidad</th><th>Kg Totales</th><th>Costo</th><th>Acciones</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+                
+                <form id="ingredient-form">
+                    <h3 id="ingredient-form-title">Añadir Ingrediente</h3>
+                    <div class="autocomplete">
+                        <input type="text" id="ing-name" placeholder="Nombre" required autocomplete="off">
+                        <div class="autocomplete-items" id="autocomplete-list"></div>
+                    </div>
+                    <input type="number" id="ing-qty" placeholder="Cantidad" step="0.01" required>
+                    <select id="ing-unit" required><option value="kg">kg</option><option value="g">g</option></select>
+                    <button type="submit" id="ingredient-submit-btn" class="btn-primary">Añadir</button>
+                    <button type="button" id="cancel-edit-btn" class="btn-secondary" style="display: none;">Cancelar</button>
+                </form>
+
+                <h3>Resultados del Cálculo</h3>
+                <div id="results-display">
+                    <!-- Los resultados se llenarán con JS -->
+                </div>
+                
+                <!-- Contenedor para el análisis de la IA -->
+                <div id="analysis-container">
+                    <h3>Análisis de la IA</h3>
+                    <div id="analysis-result"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="chat-bubble">💬</div>
+    <div id="chat-window">
+        <div id="chat-history"></div>
+        <form id="chat-form"><input type="text" id="chat-input" placeholder="Pregunta algo..." autocomplete="off"><button type="submit">Enviar</button></form>
+    </div>
+
+    <script>
+        // --- VARIABLES GLOBALES ---
+        const BASE_URL = 'http://127.0.0.1:5000';
+        const formulaList = document.getElementById('lista-formulas');
+        const detailsPanel = document.getElementById('details-panel');
+        const formulaNameDisplay = document.getElementById('formula-name-display');
+        const ingredientsTableBody = document.querySelector("#ingredients-table tbody");
+        const resultsDisplay = document.getElementById('results-display');
+        const ingredientForm = document.getElementById('ingredient-form');
+        const ingredientFormTitle = document.getElementById('ingredient-form-title');
+        const ingredientSubmitBtn = document.getElementById('ingredient-submit-btn');
+        const cancelEditBtn = document.getElementById('cancel-edit-btn');
+        const ingNameInput = document.getElementById('ing-name');
+        const autocompleteList = document.getElementById('autocomplete-list');
+        const chatBubble = document.getElementById('chat-bubble');
+        const chatWindow = document.getElementById('chat-window');
+        const chatForm = document.getElementById('chat-form');
+        const chatInput = document.getElementById('chat-input');
+        const chatHistory = document.getElementById('chat-history');
+        const analysisContainer = document.getElementById('analysis-container');
+        const analysisResult = document.getElementById('analysis-result');
+        
+        let currentFormulaId = null;
+        let currentlyEditingIngredientId = null;
+
+        // --- MANEJO DEL FORMULARIO DE INGREDIENTES (AÑADIR/EDITAR) ---
+        function populateFormForEdit(ingredient) {
+            currentlyEditingIngredientId = ingredient.formula_ingredient_id;
+            ingredientFormTitle.textContent = `Editando: ${ingredient.name}`;
+            document.getElementById('ing-name').value = ingredient.name;
+            document.getElementById('ing-qty').value = parseFloat(ingredient.original_qty_display);
+            document.getElementById('ing-unit').value = ingredient.original_unit.toLowerCase();
+            ingredientSubmitBtn.textContent = 'Actualizar';
+            ingredientSubmitBtn.className = 'btn-success';
+            cancelEditBtn.style.display = 'inline-block';
+        }
+
+        function resetIngredientForm() {
+            currentlyEditingIngredientId = null;
+            ingredientFormTitle.textContent = 'Añadir Ingrediente';
+            ingredientForm.reset();
+            autocompleteList.innerHTML = '';
+            ingredientSubmitBtn.textContent = 'Añadir';
+            ingredientSubmitBtn.className = 'btn-primary';
+            cancelEditBtn.style.display = 'none';
+        }
+
+        // --- FUNCIÓN PRINCIPAL PARA DIBUJAR LOS DETALLES ---
+        function updateDetailsView(data) {
+            const details = data.details || data;
+            formulaNameDisplay.textContent = details.product_name;
+            ingredientsTableBody.innerHTML = '';
+
+            (details.ingredients || []).forEach(ing => {
+                const row = ingredientsTableBody.insertRow();
+                row.innerHTML = `<td>${ing.name}</td><td>${ing.original_qty_display} ${ing.original_unit}</td><td>${ing.kg_total.toFixed(3)}</td><td>${(ing.costo_linea || 0).toFixed(2)}</td><td class="actions-cell"></td>`;
+                const editBtn = document.createElement('button');
+                editBtn.textContent = 'Editar';
+                editBtn.className = 'btn-edit';
+                editBtn.onclick = () => populateFormForEdit(ing);
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = 'Eliminar';
+                deleteBtn.className = 'btn-delete';
+                deleteBtn.onclick = () => {
+                    if (confirm(`¿Eliminar "${ing.name}" de la fórmula?`)) {
+                        fetch(`${BASE_URL}/api/ingredient/${ing.formula_ingredient_id}/delete`, { method: 'POST' })
+                            .then(res => res.json()).then(newData => updateDetailsView(newData));
+                    }
+                };
+                row.cells[4].appendChild(editBtn);
+                row.cells[4].appendChild(deleteBtn);
+            });
+            
+            const totals = details.totals || {};
+            resultsDisplay.innerHTML = `
+                <p><strong>Peso Total:</strong> ${(totals.total_kg || 0).toFixed(3)} kg</p>
+                <p><strong>Costo Total:</strong> $${(totals.costo_total || 0).toFixed(2)}</p>
+                <p><strong>Costo por Kg:</strong> $${(totals.costo_por_kg || 0).toFixed(2)}</p>
+                <hr>
+                <p><strong>% Proteína:</strong> ${(totals.protein_perc || 0).toFixed(2)}%</p>
+                <p><strong>% Grasa:</strong> ${(totals.fat_perc || 0).toFixed(2)}%</p>
+                <p><strong>% Humedad Total:</strong> ${(totals.water_perc || 0).toFixed(2)}%</p>
+                <hr>
+                <p><strong>Ratio Agua/Proteína:</strong> ${totals.aw_fp_ratio_str || 'N/A'}</p>
+                <p><strong>Ratio Grasa/Proteína:</strong> ${totals.af_fp_ratio_str || 'N/A'}</p>
+                <div style="text-align: center; margin-top: 1em;">
+                    <button id="analyze-formula-btn" class="btn-success">Analizar Fórmula ✨</button>
+                </div>
+            `;
+            // Re-asignar el event listener para el botón de análisis
+            document.getElementById('analyze-formula-btn').addEventListener('click', analyzeFormula);
+            detailsPanel.style.display = 'block';
+        }
+        
+        // --- LÓGICA DE FORMULARIOS Y API ---
+        function loadFormulas() {
+            fetch(`${BASE_URL}/api/formulas`).then(res => res.json()).then(data => {
+                formulaList.innerHTML = '';
+                data.forEach(formula => addFormulaToList(formula));
+            });
+        }
+
+        function addFormulaToList(formula) {
+            const item = document.createElement('li');
+            item.textContent = formula.product_name;
+            item.dataset.id = formula.id;
+            item.addEventListener('click', () => {
+                document.querySelectorAll('#lista-formulas li').forEach(li => li.classList.remove('selected'));
+                item.classList.add('selected');
+                currentFormulaId = formula.id;
+                analysisContainer.style.display = 'none'; // Ocultar análisis anterior
+                fetch(`${BASE_URL}/api/formula/` + formula.id).then(res => res.json()).then(data => updateDetailsView(data));
+            });
+            formulaList.appendChild(item);
+        }
+
+        function analyzeFormula() {
+            if (!currentFormulaId) return;
+            analysisContainer.style.display = 'block';
+            analysisResult.innerHTML = '<p>Analizando, por favor espere...</p>';
+            fetch(`${BASE_URL}/api/formula/${currentFormulaId}/analyze`, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    let htmlResponse = data.analysis.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+                    analysisResult.innerHTML = htmlResponse;
+                })
+                .catch(error => {
+                    analysisResult.innerHTML = '<p>Error al contactar el servicio de análisis.</p>';
+                });
+        }
+
+        document.getElementById('add-formula-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const input = document.getElementById('product-name-input');
+            const productName = input.value.trim();
+            if (productName) {
+                fetch(`${BASE_URL}/api/formulas/add`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ product_name: productName })
+                }).then(res => res.json()).then(result => {
+                    if (result.success) {
+                        addFormulaToList(result.formula);
+                        input.value = '';
+                    } else { alert('Error: ' + result.error); }
+                });
+            }
+        });
+
+        ingredientForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const ingredientData = { name: ingNameInput.value.trim(), quantity: document.getElementById('ing-qty').value, unit: document.getElementById('ing-unit').value };
+            let url = currentlyEditingIngredientId ? `${BASE_URL}/api/ingredient/${currentlyEditingIngredientId}/update` : `${BASE_URL}/api/formula/${currentFormulaId}/ingredients/add`;
+            fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ingredientData) })
+                .then(res => res.json()).then(result => { updateDetailsView(result); resetIngredientForm(); });
+        });
+
+        cancelEditBtn.addEventListener('click', resetIngredientForm);
+        
+        ingNameInput.addEventListener('input', function() {
+            const query = this.value;
+            if (!query || query.length < 2) { autocompleteList.innerHTML = ''; return; }
+            fetch(`${BASE_URL}/api/ingredients/search?q=${query}`).then(response => response.json()).then(data => {
+                autocompleteList.innerHTML = '';
+                data.forEach(name => {
+                    const suggestionDiv = document.createElement('div');
+                    suggestionDiv.textContent = name;
+                    suggestionDiv.addEventListener('click', function() { ingNameInput.value = this.textContent; autocompleteList.innerHTML = ''; });
+                    autocompleteList.appendChild(suggestionDiv);
+                });
+            });
+        });
+
+        // --- LÓGICA DEL CHATBOT ---
+        chatBubble.addEventListener('click', () => {
+            chatWindow.style.display = chatWindow.style.display === 'none' ? 'flex' : 'none';
+        });
+
+        chatForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const userQuestion = chatInput.value.trim();
+            if (!userQuestion) return;
+            appendMessage(userQuestion, 'user-message');
+            chatInput.value = '';
+            fetch(`${BASE_URL}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: userQuestion }) })
+                .then(res => res.json()).then(data => appendMessage(data.answer, 'bot-message'));
+        });
+
+        function appendMessage(text, className) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${className}`;
+            messageDiv.textContent = text;
+            chatHistory.appendChild(messageDiv);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        // --- CARGA INICIAL ---
+        window.onload = loadFormulas;
+    </script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Ingredientes</title>
+    <style>
+        body { font-family: sans-serif; padding: 2em; max-width: 1200px; margin: auto; }
+        h1, h2 { color: #333; }
+        nav a { text-decoration: none; color: #007bff; font-weight: bold; margin: 0 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 2em; table-layout: fixed; }
+        th, td { border: 1px solid #ddd; padding: 8px; vertical-align: top; word-wrap: break-word; }
+        th { background-color: #f2f2f2; }
+        #ingredient-form-container { margin-top: 2em; padding: 1.5em; border: 1px solid #ccc; border-radius: 8px; background-color: #f9f9f9; }
+        #ingredient-form input { padding: 8px; margin: 5px; }
+        .btn { padding: 8px 15px; color: white; border: none; cursor: pointer; border-radius: 4px; }
+        .btn-primary { background-color: #007bff; }
+        .btn-success { background-color: #28a745; }
+        .btn-secondary { background-color: #6c757d; }
+        .btn-edit { background-color: #28a745; color: white; padding: 5px 10px; margin-right: 5px; }
+        .btn-delete { background-color: #dc3545; color: white; padding: 5px 10px; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/">Formulador</a> |
+        <a href="/biblioteca">Biblioteca</a> |
+        <a href="/gestion_ingredientes">Gestión de Ingredientes</a> |
+        <a href="/gestion_bibliografia">Gestión de Bibliografía</a>
+    </nav>
+    <hr>
+    <h1>Gestión de Ingredientes Maestros</h1>
+
+    <div id="ingredient-form-container">
+        <h2 id="form-title">Añadir Nuevo Ingrediente</h2>
+        <form id="ingredient-form">
+            <input type="text" id="form-name" placeholder="Nombre" required>
+            <input type="number" id="form-protein" placeholder="% Proteína" step="0.01">
+            <input type="number" id="form-fat" placeholder="% Grasa" step="0.01">
+            <input type="number" id="form-water" placeholder="% Agua" step="0.01">
+            <input type="number" id="form-retention" placeholder="Factor Ret." step="0.01">
+            <input type="number" id="form-price" placeholder="Precio/kg" step="0.01">
+            <button type="submit" id="submit-btn" class="btn btn-primary">Guardar</button>
+            <button type="button" id="cancel-btn" class="btn btn-secondary" style="display: none;">Cancelar</button>
+        </form>
+    </div>
+    
+    <table id="master-ingredients-table">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>% Proteína</th>
+                <th>% Grasa</th>
+                <th>% Agua</th>
+                <th>Factor Ret.</th>
+                <th>Precio/kg</th>
+                <th>Categoría (IA)</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        const tableBody = document.querySelector("#master-ingredients-table tbody");
+        const ingredientForm = document.getElementById('ingredient-form');
+        const formTitle = document.getElementById('form-title');
+        const submitBtn = document.getElementById('submit-btn');
+        const cancelBtn = document.getElementById('cancel-btn');
+        let currentlyEditingId = null;
+
+        function populateFormForEdit(ingredient) {
+            currentlyEditingId = ingredient.id;
+            formTitle.textContent = `Editando: ${ingredient.name}`;
+            document.getElementById('form-name').value = ingredient.name;
+            document.getElementById('form-protein').value = ingredient.protein_percent || '';
+            document.getElementById('form-fat').value = ingredient.fat_percent || '';
+            document.getElementById('form-water').value = ingredient.water_percent || '';
+            document.getElementById('form-retention').value = ingredient.water_retention_factor || '';
+            document.getElementById('form-price').value = ingredient.precio_por_kg || '';
+            submitBtn.textContent = 'Actualizar';
+            submitBtn.className = 'btn btn-success';
+            cancelBtn.style.display = 'inline-block';
+        }
+
+        function resetForm() {
+            currentlyEditingId = null;
+            formTitle.textContent = 'Añadir Nuevo Ingrediente';
+            ingredientForm.reset();
+            submitBtn.textContent = 'Guardar';
+            submitBtn.className = 'btn btn-primary';
+            cancelBtn.style.display = 'none';
+        }
+
+        function addActionsToRow(row, ingredient) {
+            const actionsCell = row.insertCell(-1);
+            const editButton = document.createElement('button');
+            editButton.className = 'btn-edit';
+            editButton.textContent = 'Editar';
+            editButton.onclick = () => populateFormForEdit(ingredient);
+            
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'btn-delete';
+            deleteButton.textContent = 'Eliminar';
+            deleteButton.onclick = () => deleteIngredient(ingredient.id, ingredient.name);
+            
+            actionsCell.appendChild(editButton);
+            actionsCell.appendChild(deleteButton);
+        }
+
+        function loadIngredientsTable() {
+            fetch('/api/ingredientes')
+                .then(res => res.json())
+                .then(data => {
+                    tableBody.innerHTML = '';
+                    data.forEach(ingredient => {
+                        const row = tableBody.insertRow();
+                        row.dataset.id = ingredient.id;
+                        row.innerHTML = `
+                            <td>${ingredient.name}</td>
+                            <td>${ingredient.protein_percent || 0}</td>
+                            <td>${ingredient.fat_percent || 0}</td>
+                            <td>${ingredient.water_percent || 0}</td>
+                            <td>${ingredient.water_retention_factor || 0}</td>
+                            <td>${ingredient.precio_por_kg || 0}</td>
+                            <td>${ingredient.categoria || 'N/A'}</td>
+                        `;
+                        addActionsToRow(row, ingredient);
+                    });
+                });
+        }
+
+        function deleteIngredient(id, name) {
+            if (!confirm(`¿Estás seguro de que quieres eliminar "${name}"?`)) return;
+            fetch(`/api/ingredientes/${id}/delete`, { method: 'POST' })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.success) {
+                        tableBody.querySelector(`tr[data-id='${id}']`).remove();
+                    } else {
+                        alert('Error: ' + result.error);
+                    }
+                });
+        }
+
+        ingredientForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const ingredientData = {
+                name: document.getElementById('form-name').value,
+                protein_percent: document.getElementById('form-protein').value || null,
+                fat_percent: document.getElementById('form-fat').value || null,
+                water_percent: document.getElementById('form-water').value || null,
+                water_retention_factor: document.getElementById('form-retention').value || null,
+                precio_por_kg: document.getElementById('form-price').value || null,
+            };
+            
+            let url;
+            if (currentlyEditingId) {
+                url = `/api/ingredientes/${currentlyEditingId}/update`;
+            } else {
+                url = '/api/ingredientes/add';
+            }
+
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(ingredientData)
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    loadIngredientsTable();
+                    resetForm();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            });
+        });
+
+        cancelBtn.addEventListener('click', resetForm);
+        window.onload = loadIngredientsTable;
+    </script>
+</body>
+</html>
