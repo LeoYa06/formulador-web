@@ -105,7 +105,6 @@
 
     <script>
         // --- VARIABLES GLOBALES ---
-        const BASE_URL = 'http://127.0.0.1:5000';
         const formulaList = document.getElementById('lista-formulas');
         const detailsPanel = document.getElementById('details-panel');
         const formulaNameDisplay = document.getElementById('formula-name-display');
@@ -168,7 +167,7 @@
                 deleteBtn.className = 'btn-delete';
                 deleteBtn.onclick = () => {
                     if (confirm(`¿Eliminar "${ing.name}" de la fórmula?`)) {
-                        fetch(`${BASE_URL}/api/ingredient/${ing.formula_ingredient_id}/delete`, { method: 'POST' })
+                        fetch(`/api/ingredient/${ing.formula_ingredient_id}/delete`, { method: 'POST' })
                             .then(res => res.json()).then(newData => updateDetailsView(newData));
                     }
                 };
@@ -192,14 +191,13 @@
                     <button id="analyze-formula-btn" class="btn-success">Analizar Fórmula ✨</button>
                 </div>
             `;
-            // Re-asignar el event listener para el botón de análisis
             document.getElementById('analyze-formula-btn').addEventListener('click', analyzeFormula);
             detailsPanel.style.display = 'block';
         }
         
         // --- LÓGICA DE FORMULARIOS Y API ---
         function loadFormulas() {
-            fetch(`${BASE_URL}/api/formulas`).then(res => res.json()).then(data => {
+            fetch('/api/formulas').then(res => res.json()).then(data => {
                 formulaList.innerHTML = '';
                 data.forEach(formula => addFormulaToList(formula));
             });
@@ -213,8 +211,8 @@
                 document.querySelectorAll('#lista-formulas li').forEach(li => li.classList.remove('selected'));
                 item.classList.add('selected');
                 currentFormulaId = formula.id;
-                analysisContainer.style.display = 'none'; // Ocultar análisis anterior
-                fetch(`${BASE_URL}/api/formula/` + formula.id).then(res => res.json()).then(data => updateDetailsView(data));
+                analysisContainer.style.display = 'none';
+                fetch('/api/formula/' + formula.id).then(res => res.json()).then(data => updateDetailsView(data));
             });
             formulaList.appendChild(item);
         }
@@ -223,14 +221,11 @@
             if (!currentFormulaId) return;
             analysisContainer.style.display = 'block';
             analysisResult.innerHTML = '<p>Analizando, por favor espere...</p>';
-            fetch(`${BASE_URL}/api/formula/${currentFormulaId}/analyze`, { method: 'POST' })
+            fetch(`/api/formula/${currentFormulaId}/analyze`, { method: 'POST' })
                 .then(res => res.json())
                 .then(data => {
                     let htmlResponse = data.analysis.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
                     analysisResult.innerHTML = htmlResponse;
-                })
-                .catch(error => {
-                    analysisResult.innerHTML = '<p>Error al contactar el servicio de análisis.</p>';
                 });
         }
 
@@ -239,7 +234,7 @@
             const input = document.getElementById('product-name-input');
             const productName = input.value.trim();
             if (productName) {
-                fetch(`${BASE_URL}/api/formulas/add`, {
+                fetch('/api/formulas/add', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ product_name: productName })
@@ -255,7 +250,7 @@
         ingredientForm.addEventListener('submit', function(event) {
             event.preventDefault();
             const ingredientData = { name: ingNameInput.value.trim(), quantity: document.getElementById('ing-qty').value, unit: document.getElementById('ing-unit').value };
-            let url = currentlyEditingIngredientId ? `${BASE_URL}/api/ingredient/${currentlyEditingIngredientId}/update` : `${BASE_URL}/api/formula/${currentFormulaId}/ingredients/add`;
+            let url = currentlyEditingIngredientId ? `/api/ingredient/${currentlyEditingIngredientId}/update` : `/api/formula/${currentFormulaId}/ingredients/add`;
             fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ingredientData) })
                 .then(res => res.json()).then(result => { updateDetailsView(result); resetIngredientForm(); });
         });
@@ -265,7 +260,7 @@
         ingNameInput.addEventListener('input', function() {
             const query = this.value;
             if (!query || query.length < 2) { autocompleteList.innerHTML = ''; return; }
-            fetch(`${BASE_URL}/api/ingredients/search?q=${query}`).then(response => response.json()).then(data => {
+            fetch(`/api/ingredients/search?q=${query}`).then(response => response.json()).then(data => {
                 autocompleteList.innerHTML = '';
                 data.forEach(name => {
                     const suggestionDiv = document.createElement('div');
@@ -287,7 +282,7 @@
             if (!userQuestion) return;
             appendMessage(userQuestion, 'user-message');
             chatInput.value = '';
-            fetch(`${BASE_URL}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: userQuestion }) })
+            fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: userQuestion }) })
                 .then(res => res.json()).then(data => appendMessage(data.answer, 'bot-message'));
         });
 
