@@ -50,7 +50,7 @@ def process_ingredients_for_display(ingredients_data: list[dict]) -> list[dict]:
 
 def calculate_formula_totals(processed_ingredients: list[dict]) -> dict:
     """
-    Calcula todos los totales de la fórmula, incluyendo porcentajes, costos y ratios.
+    Calcula todos los totales de la fórmula con la lógica de humedad corregida.
     """
     if not processed_ingredients:
         return {
@@ -59,20 +59,24 @@ def calculate_formula_totals(processed_ingredients: list[dict]) -> dict:
             'aw_fp_ratio_str': 'N/A', 'af_fp_ratio_str': 'N/A'
         }
 
+    # --- CÁLCULO DE TOTALES EN KG ---
     total_kg = sum(item.get('kg_total', 0) for item in processed_ingredients)
     total_protein_kg = sum(item.get('kg_protein', 0) for item in processed_ingredients)
     total_fat_kg = sum(item.get('kg_fat', 0) for item in processed_ingredients)
-    total_water_kg = sum(item.get('kg_water', 0) for item in processed_ingredients)
+    total_water_kg = sum(item.get('kg_water', 0) for item in processed_ingredients) # Esta es el agua total REAL
     total_retained_water_kg = sum(item.get('kg_total', 0) * item.get('water_retention_factor', 0) for item in processed_ingredients)
     costo_total = sum(item.get('costo_linea', 0) for item in processed_ingredients)
     
+    # --- CÁLCULO DE VALORES FINALES ---
     costo_por_kg = costo_total / total_kg if total_kg > 0 else 0
-    effective_total_water_kg = total_water_kg + total_retained_water_kg
     
+    # --- CÁLCULO DE PORCENTAJES (CORREGIDO) ---
+    # El % de humedad se calcula usando el agua total real, sin sumar el agua retenida.
     protein_perc = (total_protein_kg / total_kg * 100.0) if total_kg > 0 else 0
     fat_perc = (total_fat_kg / total_kg * 100.0) if total_kg > 0 else 0
-    water_perc = (effective_total_water_kg / total_kg * 100.0) if total_kg > 0 else 0
+    water_perc = (total_water_kg / total_kg * 100.0) if total_kg > 0 else 0
     
+    # --- CÁLCULOS DE RATIOS (usando los porcentajes correctos) ---
     aw_fp_ratio = (water_perc / protein_perc) if protein_perc > 0 else float('inf')
     af_fp_ratio = (fat_perc / protein_perc) if protein_perc > 0 else float('inf')
     aw_fp_ratio_str = f"{aw_fp_ratio:.2f}" if not math.isinf(aw_fp_ratio) else "N/A"
@@ -83,10 +87,10 @@ def calculate_formula_totals(processed_ingredients: list[dict]) -> dict:
         'total_protein_kg': total_protein_kg,
         'total_fat_kg': total_fat_kg,
         'total_water_kg': total_water_kg,
-        'total_retained_water_kg': total_retained_water_kg,
+        'total_retained_water_kg': total_retained_water_kg, # Lo mantenemos como dato informativo
         'protein_perc': protein_perc,
         'fat_perc': fat_perc,
-        'water_perc': water_perc,
+        'water_perc': water_perc, # Porcentaje de humedad corregido
         'costo_total': costo_total,
         'costo_por_kg': costo_por_kg,
         'aw_fp_ratio_str': aw_fp_ratio_str,
