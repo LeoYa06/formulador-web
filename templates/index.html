@@ -12,8 +12,6 @@
         .left-panel { flex: 1; background-color: white; padding: 1em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.05); }
         .right-panel { flex: 2; }
         ul { list-style-type: none; padding: 0; }
-        li { padding: 8px; border-bottom: 1px solid #ccc; border-radius: 4px; margin-bottom: 5px; }
-        li:hover, li.selected { background-color: #e0eafc; cursor: pointer; }
         form { margin-top: 1em; padding: 1em; border: 1px solid #ddd; border-radius: 5px; background-color: #fafafa;}
         input, select, button { padding: 8px; margin: 2px; border: 1px solid #ccc; border-radius: 4px; }
         button { color: white; border: none; cursor: pointer; }
@@ -41,6 +39,11 @@
         .user-message { background-color: #007bff; color: white; align-self: flex-end; margin-left: auto; }
         .bot-message { background-color: #e9ecef; color: #333; align-self: flex-start; }
         #analysis-container { margin-top: 1em; background-color: #f0f8ff; padding: 1em; border-radius: 8px; display: none; border: 1px solid #cfe2f3;}
+        .formula-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #ccc; }
+        .formula-item:hover, .formula-item.selected { background-color: #e0eafc; }
+        .formula-name { cursor: pointer; flex-grow: 1; }
+        .formula-delete-btn { background-color: #dc3545; color: white; border: none; border-radius: 4px; padding: 2px 6px; font-size: 0.8em; cursor: pointer; visibility: hidden; }
+        .formula-item:hover .formula-delete-btn { visibility: visible; }
     </style>
 </head>
 <body>
@@ -124,6 +127,54 @@
         let currentFormulaId = null;
         let currentlyEditingIngredientId = null;
 
+         // --- FUNCIÓN PARA AÑADIR FÓRMULA A LA LISTA (CON BOTÓN DE ELIMINAR) ---
+        function addFormulaToList(formula) {
+            const item = document.createElement('li');
+            item.className = 'formula-item';
+            item.dataset.id = formula.id;
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'formula-name';
+            nameSpan.textContent = formula.product_name;
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'formula-delete-btn';
+            deleteBtn.textContent = 'X';
+            deleteBtn.title = 'Eliminar fórmula';
+
+            item.appendChild(nameSpan);
+            item.appendChild(deleteBtn);
+
+            nameSpan.addEventListener('click', () => {
+                document.querySelectorAll('#lista-formulas li').forEach(li => li.classList.remove('selected'));
+                item.classList.add('selected');
+                currentFormulaId = formula.id;
+                analysisContainer.style.display = 'none';
+                fetch('/api/formula/' + formula.id).then(res => res.json()).then(data => updateDetailsView(data));
+            });
+
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (confirm(`¿Estás seguro de que quieres eliminar la fórmula "${formula.product_name}"?`)) {
+                    fetch(`/api/formulas/${formula.id}/delete`, { method: 'POST' })
+                        .then(res => res.json())
+                        .then(result => {
+                            if (result.success) {
+                                item.remove();
+                                if (currentFormulaId === formula.id) {
+                                    detailsPanel.style.display = 'none';
+                                    currentFormulaId = null;
+                                }
+                            } else {
+                                alert('Error: ' + result.error);
+                            }
+                        });
+                }
+            });
+
+            formulaList.appendChild(item);
+        }
+        
         // --- MANEJO DEL FORMULARIO DE INGREDIENTES (AÑADIR/EDITAR) ---
         function populateFormForEdit(ingredient) {
             currentlyEditingIngredientId = ingredient.formula_ingredient_id;

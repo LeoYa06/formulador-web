@@ -150,6 +150,15 @@ def analyze_formula_with_ai(formula_id):
     except Exception as e:
         print(f"Error en la API de IA para análisis: {e}")
         return jsonify({'analysis': 'Hubo un error al generar el análisis.'}), 500
+    
+@app.route("/api/formulas/<int:formula_id>/delete", methods=['POST'])
+def delete_formula_route(formula_id):
+    """Maneja la solicitud para eliminar una fórmula."""
+    success = database.delete_formula(formula_id)
+    if success:
+        return jsonify({'success': True})
+    else:
+        return jsonify({'success': False, 'error': 'No se pudo eliminar la fórmula'}), 500
 
 # --- Rutas de API para Gestión de Ingredientes ---
 @app.route("/api/ingredientes")
