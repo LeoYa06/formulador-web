@@ -123,6 +123,23 @@ def add_formula(product_name: str, description: str = "") -> int | None:
         cursor.close()
         conn.close()
 
+def delete_formula(formula_id: int) -> bool:
+    """Elimina una fórmula y sus ingredientes asociados de la base de datos."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM formulas WHERE id = %s", (formula_id,))
+        conn.commit()
+        # Devuelve True si se eliminó una fila
+        return cursor.rowcount > 0
+    except Exception as e:
+        print(f"ERROR eliminando fórmula: {e}")
+        conn.rollback()
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
 # --- Funciones para Ingredientes en Fórmulas ---
 def _get_or_create_ingredient(cursor, name: str) -> int | None:
     """Helper: Busca o crea un ingrediente maestro y devuelve su ID."""
