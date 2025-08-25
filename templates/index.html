@@ -44,6 +44,7 @@
         .formula-name { cursor: pointer; flex-grow: 1; }
         .formula-delete-btn { background-color: #dc3545; color: white; border: none; border-radius: 4px; padding: 2px 6px; font-size: 0.8em; cursor: pointer; visibility: hidden; }
         .formula-item:hover .formula-delete-btn { visibility: visible; }
+        .formula-name-edit { flex-grow: 1; padding: 4px; border: 1px solid #007bff; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -145,12 +146,61 @@
             item.appendChild(nameSpan);
             item.appendChild(deleteBtn);
 
+            // Event listener for selecting the formula
             nameSpan.addEventListener('click', () => {
+                if (document.querySelector('.formula-name-edit')) return; // Do nothing if editing
                 document.querySelectorAll('#lista-formulas li').forEach(li => li.classList.remove('selected'));
                 item.classList.add('selected');
                 currentFormulaId = formula.id;
                 analysisContainer.style.display = 'none';
                 fetch('/api/formula/' + formula.id).then(res => res.json()).then(data => updateDetailsView(data));
+            });
+
+            // Event listener for renaming
+            nameSpan.addEventListener('dblclick', () => {
+                const originalName = nameSpan.textContent;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = originalName;
+                input.className = 'formula-name-edit'; // For styling and selection
+                
+                item.replaceChild(input, nameSpan);
+                input.focus();
+
+                const saveChanges = () => {
+                    const newName = input.value.trim();
+                    if (newName && newName !== originalName) {
+                        fetch(`/api/formula/${formula.id}/rename`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ new_name: newName })
+                        })
+                        .then(res => res.json())
+                        .then(result => {
+                            if (result.success) {
+                                nameSpan.textContent = result.new_name;
+                                if (currentFormulaId === formula.id) {
+                                    formulaNameDisplay.textContent = result.new_name;
+                                }
+                            } else {
+                                alert('Error: ' + result.error);
+                                nameSpan.textContent = originalName; // Revert on failure
+                            }
+                            item.replaceChild(nameSpan, input);
+                        });
+                    } else {
+                        item.replaceChild(nameSpan, input); // Revert if no change
+                    }
+                };
+
+                input.addEventListener('blur', saveChanges);
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        input.blur(); // Trigger save
+                    } else if (e.key === 'Escape') {
+                        item.replaceChild(nameSpan, input); // Cancel edit
+                    }
+                });
             });
 
             deleteBtn.addEventListener('click', (e) => {

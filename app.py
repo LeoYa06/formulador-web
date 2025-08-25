@@ -160,6 +160,20 @@ def delete_formula_route(formula_id):
     else:
         return jsonify({'success': False, 'error': 'No se pudo eliminar la fórmula'}), 500
 
+@app.route("/api/formula/<int:formula_id>/rename", methods=['POST'])
+def rename_formula(formula_id):
+    """Renames a formula."""
+    data = request.json
+    new_name = data.get('new_name')
+    if not new_name:
+        return jsonify({'success': False, 'error': 'El nuevo nombre es requerido'}), 400
+
+    success = database.update_formula_name(formula_id, new_name)
+    if success:
+        return jsonify({'success': True, 'new_name': new_name})
+    else:
+        return jsonify({'success': False, 'error': 'No se pudo renombrar la fórmula (¿nombre duplicado?)'}), 500
+
 # --- Rutas de API para Gestión de Ingredientes ---
 @app.route("/api/ingredientes")
 def get_all_master_ingredients():

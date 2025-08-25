@@ -140,6 +140,25 @@ def delete_formula(formula_id: int) -> bool:
         cursor.close()
         conn.close()
 
+def update_formula_name(formula_id: int, new_name: str) -> bool:
+    """Actualiza el nombre de una fórmula específica."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE formulas SET product_name = %s WHERE id = %s", (new_name, formula_id))
+        conn.commit()
+        return cursor.rowcount > 0
+    except psycopg2.IntegrityError: # Puede fallar si el nombre ya existe
+        conn.rollback()
+        return False
+    except Exception as e:
+        print(f"ERROR actualizando nombre de fórmula: {e}")
+        conn.rollback()
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
 # --- Funciones para Ingredientes en Fórmulas ---
 def _get_or_create_ingredient(cursor, name: str) -> int | None:
     """Helper: Busca o crea un ingrediente maestro y devuelve su ID."""
