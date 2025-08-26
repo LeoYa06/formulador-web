@@ -260,9 +260,12 @@ def chat_with_ai():
 
 
 # --- 7. INICIALIZACIÓN ---
+# Esta línea se ejecutará cuando Gunicorn cargue la aplicación, creando las tablas.
+with app.app_context():
+    database.initialize_database()
+
 if __name__ == '__main__':
-    with app.app_context():
-        database.initialize_database()
+    # Esto solo se usará si ejecutas el archivo directamente en tu computadora.
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
 
 
