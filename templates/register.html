@@ -4,23 +4,90 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Registro - Formulador</title>
-    <!-- Puedes usar el mismo CSS que en login.html -->
     <style>
-        body { font-family: sans-serif; max-width: 500px; margin: auto; padding: 20px; }
-        .form-container { border: 1px solid #ccc; padding: 20px; border-radius: 8px; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; }
-        input { width: 100%; padding: 8px; box-sizing: border-box; }
-        button { background-color: #28a745; color: white; padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; }
-        .alert { padding: 15px; margin-bottom: 20px; border: 1px solid transparent; border-radius: 4px; color: #a94442; background-color: #f2dede; border-color: #ebccd1;}
-        .links { margin-top: 15px; text-align: center; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            max-width: 500px; 
+            margin: auto; 
+            padding: 20px; 
+            background-color: #f4f4f9; 
+        }
+        .form-container { 
+            background-color: white; 
+            border: 1px solid #ccc; 
+            padding: 25px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+        }
+        h2 { 
+            text-align: center; 
+            color: #333; 
+        }
+        .form-group { 
+            margin-bottom: 15px; 
+        }
+        .password-wrapper { 
+            position: relative; 
+            display: flex;
+            align-items: center;
+        }
+        label { 
+            display: block; 
+            margin-bottom: 5px; 
+            font-weight: bold; 
+            color: #555; 
+        }
+        input { 
+            width: 100%; 
+            padding: 10px; 
+            box-sizing: border-box; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+        }
+        .toggle-password {
+            position: absolute;
+            right: 10px;
+            cursor: pointer;
+            user-select: none;
+            color: #777;
+        }
+        button { 
+            background-color: #28a745; 
+            color: white; 
+            padding: 12px 18px; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            width: 100%; 
+            font-size: 16px; 
+        }
+        button:hover { 
+            background-color: #218838; 
+        }
+        .alert { 
+            padding: 15px; 
+            margin-bottom: 20px; 
+            border: 1px solid transparent; 
+            border-radius: 4px; 
+            color: #a94442; 
+            background-color: #f2dede; 
+            border-color: #ebccd1;
+        }
+        .links { 
+            margin-top: 20px; 
+            text-align: center; 
+        }
+        small.error-message {
+            color: red;
+            display: none;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
     <div class="form-container">
         <h2>Crear una Cuenta</h2>
 
-        <!-- Mostrar mensajes flash -->
         {% with messages = get_flashed_messages() %}
           {% if messages %}
             <div class="alert">
@@ -31,14 +98,25 @@
           {% endif %}
         {% endwith %}
 
-        <form method="POST" action="{{ url_for('register') }}">
+        <form method="POST" action="{{ url_for('register') }}" onsubmit="return validatePassword()">
             <div class="form-group">
-                <label for="username">Nombre de Usuario:</label>
-                <input type="text" id="username" name="username" required>
+                <label for="username">Correo Electrónico:</label>
+                <input type="email" id="username" name="username" required placeholder="ejemplo@correo.com">
             </div>
             <div class="form-group">
                 <label for="password">Contraseña:</label>
-                <input type="password" id="password" name="password" required>
+                <div class="password-wrapper">
+                    <input type="password" id="password" name="password" required>
+                    <span class="toggle-password" onclick="toggleVisibility('password')">👁️</span>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="confirm_password">Confirmar Contraseña:</label>
+                <div class="password-wrapper">
+                    <input type="password" id="confirm_password" name="confirm_password" required>
+                    <span class="toggle-password" onclick="toggleVisibility('confirm_password')">👁️</span>
+                </div>
+                 <small id="password_error" class="error-message">Las contraseñas no coinciden.</small>
             </div>
             <button type="submit">Registrarse</button>
         </form>
@@ -46,5 +124,32 @@
             <p>¿Ya tienes una cuenta? <a href="{{ url_for('login') }}">Inicia sesión aquí</a></p>
         </div>
     </div>
+
+    <script>
+        function toggleVisibility(id) {
+            const input = document.getElementById(id);
+            const icon = input.nextElementSibling;
+            if (input.type === "password") {
+                input.type = "text";
+                icon.textContent = '🙈';
+            } else {
+                input.type = "password";
+                icon.textContent = '👁️';
+            }
+        }
+
+        function validatePassword() {
+            const password = document.getElementById("password");
+            const confirm_password = document.getElementById("confirm_password");
+            const error_msg = document.getElementById("password_error");
+            
+            if (password.value !== confirm_password.value) {
+                error_msg.style.display = "block";
+                return false; // Evita que el formulario se envíe
+            }
+            error_msg.style.display = "none";
+            return true; // Permite enviar el formulario
+        }
+    </script>
 </body>
 </html>

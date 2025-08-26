@@ -55,6 +55,11 @@ def register():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+
+        if password != confirm_password:
+            flash('Las contraseñas no coinciden.')
+            return redirect(url_for('register'))        
         if not username or not password:
             flash('El nombre de usuario y la contraseña son requeridos.')
             return redirect(url_for('register'))
