@@ -1,8 +1,8 @@
-# db/database.py
 import os
 import psycopg2
-import psycopg2.extras # Para obtener resultados como diccionarios
+import psycopg2.extras
 import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # --- Configuración para PostgreSQL ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -27,7 +27,7 @@ def initialize_database():
         );
     ''')
 
-    # 2. Crear tabla de fórmulas (se ajustará más abajo)
+    # 2. Crear tabla de fórmulas
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS formulas (
             id SERIAL PRIMARY KEY,
@@ -36,31 +36,43 @@ def initialize_database():
             creation_date TEXT NOT NULL
         );
     ''')
+    conn.commit() # Hacemos commit aquí para separar las transacciones
+
+    # --- MODIFICACIONES A LA TABLA formulas (con manejo de errores individual) ---
 
     # 3. Añadir la columna user_id a formulas si no existe
     try:
         cursor.execute('ALTER TABLE formulas ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;')
+        conn.commit() # Commit después de un cambio exitoso
         print("Columna 'user_id' añadida a la tabla 'formulas'.")
     except psycopg2.errors.DuplicateColumn:
-        pass # La columna ya existe, no hacer nada.
+        conn.rollback() # Revierte la transacción fallida
+        print("INFO: La columna 'user_id' ya existía.")
+        pass
 
     # 4. Eliminar la antigua restricción UNIQUE de product_name si existe
     try:
-        # El nombre de la restricción puede variar, 'formulas_product_name_key' es el default de PostgreSQL
+        # El nombre de la restricción puede variar, 'formulas_product_name_key' es el default
         cursor.execute('ALTER TABLE formulas DROP CONSTRAINT formulas_product_name_key;')
+        conn.commit()
         print("Restricción UNIQUE de 'product_name' eliminada.")
     except psycopg2.ProgrammingError:
-        pass # La restricción no existe o tiene otro nombre, no hay problema.
+        conn.rollback()
+        print("INFO: La restricción 'formulas_product_name_key' no existía.")
+        pass
 
     # 5. Añadir una nueva restricción UNIQUE para (user_id, product_name)
     try:
         cursor.execute('ALTER TABLE formulas ADD CONSTRAINT unique_user_product UNIQUE (user_id, product_name);')
+        conn.commit()
         print("Restricción UNIQUE para '(user_id, product_name)' añadida.")
     except psycopg2.errors.DuplicateObject:
-        pass # La restricción ya existe, no hacer nada.
+        conn.rollback()
+        print("INFO: La restricción 'unique_user_product' ya existía.")
+        pass
 
 
-    # --- Tablas sin cambios ---
+    # --- Tablas sin cambios (se crean si no existen) ---
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS ingredients (
             id SERIAL PRIMARY KEY,
@@ -95,7 +107,7 @@ def initialize_database():
         );
     ''')
 
-    conn.commit()
+    conn.commit() # Commit final para las creaciones de tablas
     cursor.close()
     conn.close()
     print("Base de datos PostgreSQL inicializada y actualizada para multi-usuario.")
