@@ -1,3 +1,4 @@
+# db/database.py
 import os
 import psycopg2
 import psycopg2.extras
@@ -66,7 +67,7 @@ def initialize_database():
         cursor.execute('ALTER TABLE formulas ADD CONSTRAINT unique_user_product UNIQUE (user_id, product_name);')
         conn.commit()
         print("Restricción UNIQUE para '(user_id, product_name)' añadida.")
-    except psycopg2.errors.DuplicateObject:
+    except (psycopg2.errors.DuplicateObject, psycopg2.errors.DuplicateTable): # <-- CAMBIO AQUÍ
         conn.rollback()
         print("INFO: La restricción 'unique_user_product' ya existía.")
         pass
