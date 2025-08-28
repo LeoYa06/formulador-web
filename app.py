@@ -31,15 +31,16 @@ login_manager.login_view = 'login'
 login_manager.login_message = "Por favor, inicia sesión para acceder a esta página."
 
 class User(UserMixin):
-    def __init__(self, id, username):
+    def __init__(self, id, username, full_name):
         self.id = id
         self.username = username
+        self.full_name = full_name
 
 @login_manager.user_loader
 def load_user(user_id):
     user_data = database.get_user_by_id(int(user_id))
     if user_data:
-        return User(id=user_data['id'], username=user_data['username'])
+        return User(id=user_data['id'], username=user_data['username'], full_name=user_data['full_name'])
     return None
 
 # --- 3. FUNCIONES AUXILIARES (DE TU CÓDIGO ORIGINAL) ---
@@ -53,24 +54,33 @@ def _clasificar_ingrediente_con_ia(nombre_ingrediente: str) -> str:
 def register():
     if current_user.is_authenticated: return redirect(url_for('index'))
     if request.method == 'POST':
+        full_name = request.form.get('full_name')
         username = request.form.get('username')
         password = request.form.get('password')
         confirm_password = request.form.get('confirm_password')
 
+        if not all([full_name, username, password, confirm_password]):
+            flash('Todos los campos son requeridos.')
+            return redirect(url_for('register'))
+        
         if password != confirm_password:
             flash('Las contraseñas no coinciden.')
-            return redirect(url_for('register'))        
-        if not username or not password:
-            flash('El nombre de usuario y la contraseña son requeridos.')
+            return redirect(url_for('register')) 
+               
+        if not username or not password or not full_name:
+            flash('El nombre, usuario y la contraseña son requeridos.')
             return redirect(url_for('register'))
+        
         if database.get_user_by_username(username):
             flash('El nombre de usuario ya existe. Por favor, elige otro.')
             return redirect(url_for('register'))
-        if database.add_user(username, password):
+        
+        if database.add_user(username, password, full_name):
             flash('¡Cuenta creada con éxito! Ahora puedes iniciar sesión.')
             return redirect(url_for('login'))
         else:
             flash('Ocurrió un error al crear la cuenta.')
+
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])

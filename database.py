@@ -24,10 +24,22 @@ def initialize_database():
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
             username TEXT NOT NULL UNIQUE,
-            password_hash TEXT NOT NULL
+            password_hash TEXT NOT NULL,
+            full_name TEXT,
         );
     ''')
+    conn.commit()
 
+    # Añadir la columna 'full_name' si no existe (para bases de datos antiguas)
+    try:
+        cursor.execute('ALTER TABLE users ADD COLUMN full_name TEXT;')
+        conn.commit()
+        print("Columna 'full_name' añadida a la tabla 'users'.")
+    except psycopg2.errors.DuplicateColumn:
+        conn.rollback()
+        print("INFO: La columna 'full_name' ya existía.")
+        pass
+   
     # 2. Crear tabla de fórmulas
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS formulas (
@@ -119,7 +131,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 # ... (aquí va tu función initialize_database() que ya tienes) ...
 
 # --- Funciones para Usuarios ---
-def add_user(username: str, password: str) -> bool:
+def add_user(username: str, password: str, full_name: str) -> bool:
     """
     Añade un nuevo usuario a la base de datos.
     Hashea la contraseña para un almacenamiento seguro.
@@ -131,8 +143,8 @@ def add_user(username: str, password: str) -> bool:
     password_hash = generate_password_hash(password)
     try:
         cursor.execute(
-            "INSERT INTO users (username, password_hash) VALUES (%s, %s)",
-            (username, password_hash)
+            "INSERT INTO users (username, password_hash, full_name) VALUES (%s, %s, %s)",
+            (username, password_hash, full_name)
         )
         conn.commit()
         return True
