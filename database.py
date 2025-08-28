@@ -23,13 +23,12 @@ def initialize_database():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
-            username TEXT NOT NULL UNIQUE,
+            username TEXT NOT NULL UNIQUE, /* Correo electrónico */
             password_hash TEXT NOT NULL,
-            full_name TEXT,
+            full_name TEXT 
         );
-    ''')
-    conn.commit()
-
+    ''') 
+   
     # Añadir la columna 'full_name' si no existe (para bases de datos antiguas)
     try:
         cursor.execute('ALTER TABLE users ADD COLUMN full_name TEXT;')
