@@ -3,48 +3,177 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Iniciar Sesión - Formulador</title>
-    <!-- Puedes añadir aquí tu CSS -->
+    <title>Iniciar Sesión - Formulador ELME</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: sans-serif; max-width: 500px; margin: auto; padding: 20px; }
-        .form-container { border: 1px solid #ccc; padding: 20px; border-radius: 8px; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; }
-        input { width: 100%; padding: 8px; box-sizing: border-box; }
-        button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; }
-        .alert { padding: 15px; margin-bottom: 20px; border: 1px solid transparent; border-radius: 4px; color: #a94442; background-color: #f2dede; border-color: #ebccd1;}
-        .links { margin-top: 15px; text-align: center; }
+        :root {
+            --bg-color: #1a1a1a;
+            --form-bg: #2c2c2c;
+            --text-color: #f0f0f0;
+            --primary-color: #fca311; /* Un dorado/naranja del logo */
+            --primary-hover: #e89204;
+            --border-color: #444;
+        }
+        body { 
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0; 
+            background-color: var(--bg-color); 
+            color: var(--text-color);
+        }
+        .login-wrapper {
+            width: 100%;
+            max-width: 400px;
+            padding: 20px;
+        }
+        .header-container {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo {
+            max-width: 150px;
+            margin-bottom: 15px;
+        }
+        .welcome-title {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: var(--text-color);
+            margin: 0;
+        }
+        .form-container { 
+            background-color: var(--form-bg); 
+            padding: 30px; 
+            border-radius: 12px; 
+            border: 1px solid var(--border-color);
+        }
+        .form-group { 
+            margin-bottom: 20px; 
+        }
+        .password-wrapper { 
+            position: relative; 
+            display: flex;
+            align-items: center;
+        }
+        label { 
+            display: block; 
+            margin-bottom: 8px; 
+            font-weight: 500; 
+            color: #ccc; 
+        }
+        input { 
+            width: 100%; 
+            padding: 12px; 
+            box-sizing: border-box; 
+            border: 1px solid var(--border-color);
+            border-radius: 8px; 
+            background-color: #333;
+            color: var(--text-color);
+            font-size: 16px;
+        }
+        input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(252, 163, 17, 0.2);
+        }
+        .toggle-password {
+            position: absolute;
+            right: 12px;
+            cursor: pointer;
+            user-select: none;
+            color: #888;
+        }
+        button { 
+            background-color: var(--primary-color); 
+            color: #1a1a1a; 
+            padding: 12px 18px; 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            width: 100%; 
+            font-size: 16px;
+            font-weight: 700;
+            transition: background-color 0.2s ease;
+        }
+        button:hover { 
+            background-color: var(--primary-hover); 
+        }
+        .alert { 
+            padding: 15px; 
+            margin-bottom: 20px; 
+            border-radius: 8px; 
+            color: #f2dede; 
+            background-color: #a94442; 
+        }
+        .links { 
+            margin-top: 20px; 
+            text-align: center; 
+            color: #ccc;
+        }
+        .links a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .links a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
-    <div class="form-container">
-        <h2>Iniciar Sesión</h2>
+    <div class="login-wrapper">
+        <div class="header-container">
+            <!-- IMPORTANTE: Reemplaza esta URL con la URL de tu logo -->
+            <img src="https://elmefood.com/wp-content/uploads/2025/08/An-oil-painting-of-the-Food-Consulting-Company-ELME-logo-high-contrast-composition-creating-tension-featuring-rich-textures-and-visible-brushstrokes-illuminated-by-intense-dramatic-lighting-1.jpg" alt="Logo ELME" class="logo">
+            <h1 class="welcome-title">Formulador de Productos Cárnicos</h1>
+        </div>
 
-        <!-- Mostrar mensajes flash (errores, éxito, etc.) -->
-        {% with messages = get_flashed_messages() %}
-          {% if messages %}
-            <div class="alert">
-              {% for message in messages %}
-                <p>{{ message }}</p>
-              {% endfor %}
-            </div>
-          {% endif %}
-        {% endwith %}
+        <div class="form-container">
+            {% with messages = get_flashed_messages() %}
+              {% if messages %}
+                <div class="alert">
+                  {% for message in messages %}
+                    <p>{{ message }}</p>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            {% endwith %}
 
-        <form method="POST" action="{{ url_for('login') }}">
-            <div class="form-group">
-                <label for="username">Nombre de Usuario:</label>
-                <input type="text" id="username" name="username" required>
+            <form method="POST" action="{{ url_for('login') }}">
+                <div class="form-group">
+                    <label for="username">Correo Electrónico</label>
+                    <input type="email" id="username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Contraseña</label>
+                    <div class="password-wrapper">
+                        <input type="password" id="password" name="password" required>
+                        <span class="toggle-password" onclick="toggleVisibility('password')">👁️</span>
+                    </div>
+                </div>
+                <button type="submit">Entrar</button>
+            </form>
+            <div class="links">
+                <span>¿No tienes una cuenta? </span><a href="{{ url_for('register') }}">Regístrate</a>
             </div>
-            <div class="form-group">
-                <label for="password">Contraseña:</label>
-                <input type="password" id="password" name="password" required>
-            </div>
-            <button type="submit">Entrar</button>
-        </form>
-        <div class="links">
-            <p>¿No tienes una cuenta? <a href="{{ url_for('register') }}">Regístrate aquí</a></p>
         </div>
     </div>
+    <script>
+        function toggleVisibility(id) {
+            const input = document.getElementById(id);
+            const icon = input.nextElementSibling;
+            if (input.type === "password") {
+                input.type = "text";
+                icon.textContent = '🙈';
+            } else {
+                input.type = "password";
+                icon.textContent = '👁️';
+            }
+        }
+    </script>
 </body>
 </html>
