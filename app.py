@@ -63,32 +63,6 @@ def login():
         return redirect(url_for('index'))
 
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
-        # Esta es la línea clave que define user_data ANTES de usarla
-        user_data = database.get_user_by_username(username)
-
-        if user_data and check_password_hash(user_data['password_hash'], password):
-            user = User(
-                id=user_data['id'],
-                username=user_data['username'],
-                full_name=user_data.get('full_name', '')
-            )
-            login_user(user)
-            next_page = request.args.get('next')
-            return redirect(next_page or url_for('index'))
-        else:
-            flash('Login incorrecto. Revisa tu email y contraseña.')
-
-    return render_template('login.html')
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    """Maneja el inicio de sesión de los usuarios."""
-    if current_user.is_authenticated:
-        return redirect(url_for('index'))
-
-    if request.method == 'POST':
         # Las variables se definen aquí, al principio de la sección POST
         username = request.form.get('username')
         password = request.form.get('password')
