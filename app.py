@@ -217,6 +217,48 @@ def search_ingredients():
     query = request.args.get('q', '')
     return jsonify(database.search_ingredient_names(query))
 
+# --- Rutas para Gestión de Ingredientes Maestros ---
+
+@app.route("/api/ingredientes")
+@login_required
+def get_master_ingredients():
+    """Obtiene todos los ingredientes de la tabla maestra."""
+    ingredients = database.get_all_ingredients_with_details()
+    return jsonify(ingredients)
+
+@app.route("/api/ingredientes/add", methods=['POST'])
+@login_required
+def add_master_ingredient():
+    """Añade un nuevo ingrediente a la tabla maestra."""
+    data = request.json
+    try:
+        database.add_master_ingredient(data)
+        return jsonify({'success': True})
+    except Exception as e:
+        # Aquí podrías loggear el error e
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route("/api/ingredientes/<int:ing_id>/update", methods=['POST'])
+@login_required
+def update_master_ingredient(ing_id):
+    """Actualiza un ingrediente en la tabla maestra."""
+    data = request.json
+    try:
+        database.update_master_ingredient(ing_id, data)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route("/api/ingredientes/<int:ing_id>/delete", methods=['POST'])
+@login_required
+def delete_master_ingredient(ing_id):
+    """Elimina un ingrediente de la tabla maestra."""
+    try:
+        database.delete_master_ingredient(ing_id)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route("/api/chat", methods=['POST'])
 @login_required
 def chat_with_ai():
