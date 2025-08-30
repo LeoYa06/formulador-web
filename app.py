@@ -223,8 +223,68 @@ def chat_with_ai():
     # ... tu lógica de chat ...
     return jsonify({'answer': 'Respuesta del chat.'})
 
+@app.route("/api/formula/<int:formula_id>/analyze", methods=['POST'])
+@login_required
+def analyze_formula_route(formula_id):
+    """
+    Analiza una fórmula utilizando la IA generativa.
+    """
+    if not model:
+        return jsonify({'analysis': 'Error: La API de IA no está configurada.'}), 500
+
+    formula_data = database.get_formula_by_id(formula_id, current_user.id)
+    if not formula_data:
+        return jsonify({'success': False, 'error': 'Fórmula no encontrada o sin permiso'}), 404
+
+    processed_ingredients = calculations.process_ingredients_for_display(formula_data.get('ingredients', []))
+    totals = calculations.calculate_formula_totals(processed_ingredients)
+
+    # Construir el prompt para la IA
+    prompt = f"""
+    Eres un experto en tecnología de alimentos y formulación de productos.
+    Analiza la siguiente fórmula y proporciona una evaluación y recomendaciones.
+
+    **Nombre del Producto:** {formula_data['product_name']}
+
+    **Ingredientes:**
+    """
+    for ing in processed_ingredients:
+        prompt += f"- {ing['ingredient_name']}: {ing['original_qty_display']} {ing['original_unit']} ({ing['percentage']:.2f}%)\n"
+
+    prompt += f"""
+    **Resultados del Cálculo:**
+    - Peso Total: {totals.get('total_kg', 0):.3f} kg
+    - Costo Total: {totals.get('costo_total', 0):.2f}
+    - Costo por Kg: {totals.get('costo_por_kg', 0):.2f}
+    - % Proteína: {totals.get('protein_perc', 0):.2f}%
+    - % Grasa: {totals.get('fat_perc', 0):.2f}%
+    - % Humedad Total: {totals.get('water_perc', 0):.2f}%
+    - Ratio Agua/Proteína: {totals.get('aw_fp_ratio_str', 'N/A')}
+    - Ratio Grasa/Proteína: {totals.get('af_fp_ratio_str', 'N/A')}
+
+    **Análisis Solicitado:**
+    1.  **Evaluación General:** ¿Qué tipo de producto es? ¿La fórmula parece balanceada para su propósito?
+    2.  **Puntos Fuertes:** ¿Cuáles son los aspectos positivos de esta formulación? (ej. buen perfil nutricional, bajo costo, etc.)
+    3.  **Posibles Mejoras:** ¿Qué cambios sugerirías? (ej. ajustar un ingrediente para mejorar la textura, reducir costos, mejorar el perfil nutricional).
+    4.  **Riesgos Potenciales:** ¿Hay algún riesgo a considerar? (ej. problemas de estabilidad, alérgenos comunes, vida útil).
+
+    Proporciona una respuesta concisa y fácil de entender en formato Markdown.
+    """
+
+    try:
+        response = model.generate_content(prompt)
+        # Accede al texto a través del atributo 'text'
+        analysis_text = response.text
+    except Exception as e:
+        print(f"ERROR: Error al llamar a la API de Google: {e}")
+        # Considera si quieres devolver un error más específico al cliente
+        return jsonify({'analysis': f'Error al contactar el servicio de IA: {e}'}), 500
+
+    return jsonify({'analysis': analysis_text})
+
 
 # --- 6. INICIALIZACIÓN ---
+
 with app.app_context():
     database.initialize_database()
 
