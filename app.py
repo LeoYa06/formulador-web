@@ -313,8 +313,54 @@ def delete_bibliografia(entry_id):
 @app.route("/api/chat", methods=['POST'])
 @login_required
 def chat_with_ai():
-    # ... tu lógica de chat ...
-    return jsonify({'answer': 'Respuesta del chat.'})
+    """
+    Maneja las conversaciones del chatbot con la IA generativa, usando la bibliografía como contexto.
+    """
+    if not model:
+        return jsonify({'answer': 'Error: La API de IA no está configurada.'}), 500
+
+    data = request.json
+    user_question = data.get('question')
+
+    if not user_question:
+        return jsonify({'answer': 'No se recibió ninguna pregunta.'}), 400
+
+    # 1. Obtener toda la bibliografía de la base de datos
+    bibliografia_entries = database.get_all_bibliografia()
+
+    # 2. Formatear la bibliografía para el prompt
+    contexto_bibliografico = "\n\n".join([
+        f"**Título:** {entry['titulo']}\n"
+        f"**Tipo:** {entry['tipo']}\n"
+        f"**Contenido:** {entry['contenido']}"
+        for entry in bibliografia_entries
+    ])
+
+    # 3. Crear un prompt más robusto con el contexto
+    prompt = f"""
+    Eres un asistente experto en tecnología de alimentos y formulación de productos. Tu tarea es responder a las preguntas del usuario utilizando dos fuentes de información: 1) La bibliografía interna proporcionada y 2) Tu conocimiento general como IA.
+
+    Primero, busca la respuesta en la bibliografía interna. Si encuentras información relevante, úsala como base principal para tu respuesta. Luego, puedes complementar y enriquecer la respuesta con tu conocimiento general.
+
+    Si la bibliografía no contiene información relevante, responde utilizando tu conocimiento especifico en esta area aplicada a la ciencia de alimentos en la industria carnica.
+
+    --- INICIO DE LA BIBLIOGRAFÍA ---
+    {contexto_bibliografico}
+    --- FIN DE LA BIBLIOGRAFÍA ---
+
+    Ahora, responde a la siguiente pregunta del usuario de forma clara y concisa, basándote en la bibliografía proporcionada.
+
+    **Pregunta del usuario:** "{user_question}"
+    """
+
+    try:
+        response = model.generate_content(prompt)
+        ai_answer = response.text
+    except Exception as e:
+        print(f"ERROR: Error al llamar a la API de Google en el chat: {e}")
+        return jsonify({'answer': f'Error al contactar el servicio de IA: {e}'}), 500
+
+    return jsonify({'answer': ai_answer})
 
 @app.route("/api/formula/<int:formula_id>/analyze", methods=['POST'])
 @login_required
