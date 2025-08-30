@@ -109,7 +109,8 @@ def logout():
 @app.route("/")
 @login_required
 def index():
-    return render_template("index.html")
+    # Pasamos el objeto current_user a la plantilla para poder usar su nombre
+    return render_template("index.html", current_user=current_user)
 
 @app.route("/biblioteca")
 def biblioteca_page():
