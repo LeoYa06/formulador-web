@@ -17,6 +17,9 @@ def process_ingredients_for_display(ingredients_data: list[dict]) -> list[dict]:
     processed_data = []
     if not ingredients_data: return processed_data
 
+    # First, calculate the total weight to be able to calculate percentages
+    total_kg = sum(convert_to_kg(ing.get('quantity', 0), ing.get('unit', '')) for ing in ingredients_data)
+
     CATEGORY_ORDER = {
         "Cárnico": 1,
         "Agua/Hielo": 2,
@@ -27,6 +30,7 @@ def process_ingredients_for_display(ingredients_data: list[dict]) -> list[dict]:
     
     for ing in ingredients_data:
         kg_total = convert_to_kg(ing.get('quantity', 0), ing.get('unit', ''))
+        percentage = (kg_total / total_kg * 100.0) if total_kg > 0 else 0
         precio_por_kg = ing.get('precio_por_kg', 0) or 0
         categoria = ing.get('categoria', 'Retenedor/No Cárnico')
         
@@ -36,6 +40,7 @@ def process_ingredients_for_display(ingredients_data: list[dict]) -> list[dict]:
             'original_qty_display': f"{ing.get('quantity', 0):.2f}",
             'original_unit': ing.get('unit', ''),
             'kg_total': kg_total,
+            'percentage': percentage, # Add the percentage here
             'kg_protein': kg_total * ((ing.get('protein_percent', 0) or 0) / 100.0),
             'kg_fat': kg_total * ((ing.get('fat_percent', 0) or 0) / 100.0),
             'kg_water': kg_total * ((ing.get('water_percent', 0) or 0) / 100.0),
