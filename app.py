@@ -338,17 +338,21 @@ def chat_with_ai():
 
     # 3. Crear un prompt más robusto con el contexto
     prompt = f"""
-    Eres un asistente experto en tecnología de alimentos y formulación de productos. Tu tarea es responder a las preguntas del usuario utilizando dos fuentes de información: 1) La bibliografía interna proporcionada y 2) Tu conocimiento general como IA.
+    Eres un asistente experto en tecnología de alimentos y formulación de productos. Tu tarea es responder a las preguntas del usuario de la forma más completa y actualizada posible.
 
-    Primero, busca la respuesta en la bibliografía interna. Si encuentras información relevante, úsala como base principal para tu respuesta. Luego, puedes complementar y enriquecer la respuesta con tu conocimiento general.
+    Para ello, debes combinar información de tres fuentes:
+    1.  **La Bibliografía Interna:** Este es tu principal punto de partida. Úsala para obtener información de base y contexto específico de la empresa.
+    2.  **Tu Conocimiento General como IA:** Complementa la información de la bibliografía con tu conocimiento profundo sobre el tema.
+    3.  **Simulación de Búsqueda Web:** Imagina que has realizado una búsqueda en tiempo real en Google sobre el tema. Incorpora en tu respuesta las últimas tendencias, investigaciones o noticias que encontrarías.
 
-    Si la bibliografía no contiene información relevante, responde utilizando tu conocimiento especifico en esta area aplicada a la ciencia de alimentos en la industria carnica.
+    **Proceso de Respuesta:**
+    - Comienza con la información de la bibliografía si es relevante.
+    - Enriquece la respuesta con tu conocimiento general.
+    - Finaliza añadiendo los hallazgos más recientes que una búsqueda web proporcionaría, indicando que son "tendencias recientes" o "información actualizada".
 
     --- INICIO DE LA BIBLIOGRAFÍA ---
     {contexto_bibliografico}
     --- FIN DE LA BIBLIOGRAFÍA ---
-
-    Ahora, responde a la siguiente pregunta del usuario de forma clara y concisa, basándote en la bibliografía proporcionada.
 
     **Pregunta del usuario:** "{user_question}"
     """
