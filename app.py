@@ -225,7 +225,7 @@ def chat_with_ai():
 
 
 # --- 6. INICIALIZACIÓN ---
-with app.app.context():
+with app.app_context():
     database.initialize_database()
 
 if __name__ == '__main__':
