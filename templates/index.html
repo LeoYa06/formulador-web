@@ -131,7 +131,7 @@
 
     <div class="main-container">
         <div class="welcome-header">
-            <h1>Bienvenido, <span>{{ current_user.full_name }}</span></h1>
+            <h1>Bienvenido, <span>{{ current_user.full_name or current_user.username }}</span></h1>
         </div>
         
         <div class="content-grid">
