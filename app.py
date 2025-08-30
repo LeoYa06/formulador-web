@@ -38,10 +38,8 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    """Carga un usuario desde la base de datos para la sesión."""
     user_data = database.get_user_by_id(int(user_id))
     if user_data:
-        # Usamos .get('full_name', '') para que funcione con usuarios antiguos sin nombre
         return User(
             id=user_data['id'],
             username=user_data['username'],
@@ -49,13 +47,40 @@ def load_user(user_id):
         )
     return None
 
-# --- 3. FUNCIONES AUXILIARES (DE TU CÓDIGO ORIGINAL) ---
-def _clasificar_ingrediente_con_ia(nombre_ingrediente: str) -> str:
-    if not model: return "Retenedor/No Cárnico"
-    # ... (Lógica de IA sin cambios)
-    return "Retenedor/No Cárnico" # Placeholder, tu lógica original va aquí
+# --- 3. RUTAS DE AUTENTICACIÓN ---
 
-# --- 4. RUTAS DE AUTENTICACIÓN ---
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """Maneja el registro de nuevos usuarios."""
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        full_name = request.form.get('full_name')
+        username = request.form.get('username')   # Correo
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+
+        if not all([full_name, username, password, confirm_password]):
+            flash('Todos los campos son requeridos.')
+            return redirect(url_for('register'))
+        
+        if password != confirm_password:
+            flash('Las contraseñas no coinciden.')
+            return redirect(url_for('register'))
+
+        if database.get_user_by_username(username):
+            flash('Este correo electrónico ya está registrado.')
+            return redirect(url_for('register'))
+        
+        if database.add_user(username, password, full_name):
+            flash('¡Cuenta creada con éxito! Ahora puedes iniciar sesión.')
+            return redirect(url_for('login'))
+        else:
+            flash('Ocurrió un error al crear la cuenta.')
+    
+    return render_template('register.html')
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """Maneja el inicio de sesión de los usuarios."""
@@ -63,14 +88,11 @@ def login():
         return redirect(url_for('index'))
 
     if request.method == 'POST':
-        # Las variables se definen aquí, al principio de la sección POST
         username = request.form.get('username')
         password = request.form.get('password')
         
-        # user_data se define aquí
         user_data = database.get_user_by_username(username)
 
-        # Y se usa en el 'if' que está al mismo nivel de indentación
         if user_data and check_password_hash(user_data['password_hash'], password):
             user = User(
                 id=user_data['id'],
@@ -83,41 +105,40 @@ def login():
         else:
             flash('Login incorrecto. Revisa tu email y contraseña.')
 
-    # Esta línea está fuera del 'if request.method == 'POST'', por eso tiene menos indentación
     return render_template('login.html')
 
 @app.route('/logout')
 @login_required
 def logout():
+    """Cierra la sesión del usuario."""
     logout_user()
     flash('Has cerrado sesión exitosamente.')
     return redirect(url_for('login'))
 
-# --- 5. RUTAS DE PÁGINAS ---
+
+# --- 4. RUTAS DE PÁGINAS PRINCIPALES ---
 @app.route("/")
 @login_required
 def index():
-    # Pasamos el objeto current_user a la plantilla para poder usar su nombre
     return render_template("index.html", current_user=current_user)
 
 @app.route("/biblioteca")
 def biblioteca_page():
-    # Esta página es pública, no requiere login
     return render_template("biblioteca.html")
 
 @app.route("/gestion_ingredientes")
-@login_required # Protegida
+@login_required
 def gestion_ingredientes_page():
     return render_template("gestion_ingredientes.html")
 
 @app.route("/gestion_bibliografia")
-@login_required # Protegida
+@login_required
 def gestion_bibliografia_page():
     return render_template("gestion_bibliografia.html")
 
-# --- 6. RUTAS DE API (FUSIONADAS Y PROTEGIDAS) ---
 
-# --- API para Fórmulas ---
+# --- 5. RUTAS DE API ---
+# (Aquí van todas tus rutas de API que ya tenías, no es necesario copiarlas de nuevo si ya están bien)
 @app.route("/api/formulas")
 @login_required
 def get_formulas():
@@ -148,21 +169,14 @@ def get_formula_details(formula_id):
     
     processed_ingredients = calculations.process_ingredients_for_display(formula_data.get('ingredients', []))
     totals = calculations.calculate_formula_totals(processed_ingredients)
-    response_data = {'success': True, 'details': {'id': formula_data['id'], 'product_name': formula_data['product_name'], 'description': formula_data['description'], 'ingredients': processed_ingredients, 'totals': totals}}
+    response_data = {'success': True, 'details': {
+        'id': formula_data['id'], 
+        'product_name': formula_data['product_name'], 
+        'description': formula_data['description'], 
+        'ingredients': processed_ingredients, 
+        'totals': totals
+    }}
     return jsonify(response_data)
-
-@app.route("/api/formula/<int:formula_id>/rename", methods=['POST'])
-@login_required
-def rename_formula(formula_id):
-    data = request.json
-    new_name = data.get('new_name')
-    if not new_name:
-        return jsonify({'success': False, 'error': 'El nuevo nombre es requerido'}), 400
-    success = database.update_formula_name(formula_id, new_name, current_user.id)
-    if success:
-        return jsonify({'success': True, 'new_name': new_name})
-    else:
-        return jsonify({'success': False, 'error': 'No se pudo renombrar (¿nombre duplicado?)'}), 409
 
 @app.route("/api/formulas/<int:formula_id>/delete", methods=['POST'])
 @login_required
@@ -173,11 +187,9 @@ def delete_formula_route(formula_id):
     else:
         return jsonify({'success': False, 'error': 'No se pudo eliminar la fórmula'}), 403
 
-# --- API para Ingredientes DENTRO de una Fórmula ---
 @app.route("/api/formula/<int:formula_id>/ingredients/add", methods=['POST'])
 @login_required
 def add_ingredient(formula_id):
-    # (Tu lógica original aquí, ya es segura porque la fórmula se carga con user_id)
     data = request.json
     name, quantity, unit = data.get('name'), data.get('quantity'), data.get('unit')
     database.add_ingredient_to_formula(formula_id, name, float(quantity), unit)
@@ -186,7 +198,6 @@ def add_ingredient(formula_id):
 @app.route("/api/ingredient/<int:formula_ingredient_id>/update", methods=['POST'])
 @login_required
 def update_ingredient_in_formula(formula_ingredient_id):
-    # (Tu lógica original aquí)
     parent_formula_id = database.get_formula_id_for_ingredient(formula_ingredient_id)
     data = request.json
     name, quantity, unit = data.get('name'), data.get('quantity'), data.get('unit')
@@ -196,80 +207,28 @@ def update_ingredient_in_formula(formula_ingredient_id):
 @app.route("/api/ingredient/<int:formula_ingredient_id>/delete", methods=['POST'])
 @login_required
 def delete_ingredient_from_formula(formula_ingredient_id):
-    # (Tu lógica original aquí)
     parent_formula_id = database.get_formula_id_for_ingredient(formula_ingredient_id)
     database.delete_ingredient(formula_ingredient_id)
     return get_formula_details(parent_formula_id)
 
-# --- API para Análisis con IA ---
-@app.route("/api/formula/<int:formula_id>/analyze", methods=['POST'])
+@app.route("/api/ingredients/search")
 @login_required
-def analyze_formula_with_ai(formula_id):
-    # (Tu lógica original aquí, ya es segura)
-    if not model: return jsonify({'analysis': 'El servicio de IA no está configurado.'}), 500
-    formula_data = database.get_formula_by_id(formula_id, current_user.id)
-    if not formula_data: return jsonify({'success': False, 'error': 'Fórmula no encontrada'}), 404
-    # ... resto de tu lógica de IA
-    return jsonify({'analysis': 'Análisis completado.'}) # Placeholder
+def search_ingredients():
+    query = request.args.get('q', '')
+    return jsonify(database.search_ingredient_names(query))
 
-# --- API para Gestión de Ingredientes MAESTROS ---
-@app.route("/api/ingredientes")
-@login_required
-def get_all_master_ingredients():
-    return jsonify(database.get_all_ingredients_with_details())
-
-@app.route("/api/ingredientes/add", methods=['POST'])
-@login_required
-def add_new_master_ingredient():
-    # (Tu lógica original aquí)
-    data = request.json
-    new_id = database.add_master_ingredient(data)
-    if new_id:
-        data['id'] = new_id
-        return jsonify({'success': True, 'ingredient': data})
-    return jsonify({'success': False, 'error': 'No se pudo añadir'}), 500
-
-# ... (Resto de tus rutas de API para ingredientes, bibliografía y chat)
-# ... (Asegúrate de que todas las que modifican datos estén protegidas)
-
-# --- API para Bibliografía (Gestión protegida, vista pública) ---
-@app.route("/api/bibliografia")
-def get_bibliografia_entries():
-    # Cualquiera puede ver la bibliografía
-    return jsonify(database.get_all_bibliografia())
-
-@app.route("/api/bibliografia/add", methods=['POST'])
-@login_required # Pero solo usuarios logueados pueden añadir
-def add_new_bibliografia_entry():
-    # (Tu lógica original aquí)
-    data = request.json
-    new_id = database.add_bibliografia_entry(data['titulo'], data.get('tipo'), data['contenido'])
-    if new_id:
-        data['id'] = new_id
-        return jsonify({'success': True, 'entry': data})
-    return jsonify({'success': False, 'error': 'No se pudo añadir'}), 500
-
-# ... (añade aquí tus otras rutas de API de bibliografía para update/delete con @login_required)
-
-# --- API para Chatbot ---
 @app.route("/api/chat", methods=['POST'])
-@login_required # Protegemos el chat por si acaso usa contexto de usuario en el futuro
+@login_required
 def chat_with_ai():
-    # (Tu lógica original aquí)
-    data = request.json
-    user_question = data.get('question')
-    if not user_question: return jsonify({'answer': 'Por favor, escribe una pregunta.'})
-    # ... resto de tu lógica de chat con IA
-    return jsonify({'answer': 'Respuesta del chat.'}) # Placeholder
+    # ... tu lógica de chat ...
+    return jsonify({'answer': 'Respuesta del chat.'})
 
 
-# --- 7. INICIALIZACIÓN ---
-# Esta línea se ejecutará cuando Gunicorn cargue la aplicación, creando las tablas.
-with app.app_context():
+# --- 6. INICIALIZACIÓN ---
+with app.app.context():
     database.initialize_database()
 
 if __name__ == '__main__':
-    # Esto solo se usará si ejecutas el archivo directamente en tu computadora.
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
 
 
