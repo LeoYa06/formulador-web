@@ -30,8 +30,7 @@ def process_ingredients_for_display(ingredients_data: list[dict]) -> list[dict]:
         precio_por_kg = ing.get('precio_por_kg', 0) or 0
         categoria = ing.get('categoria', 'Retenedor/No Cárnico')
         
-        processed_data.append({
-            processed_data.append({
+        processed_data.append({            
             'formula_ingredient_id': ing.get('formula_ingredient_id', -1),
             'ingredient_name': ing.get('ingredient_name', 'ErrorNombre'),
             'original_qty_display': f"{ing.get('quantity', 0):.2f}",
