@@ -259,6 +259,57 @@ def delete_master_ingredient(ing_id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# --- Rutas para Gestión de Bibliografía ---
+
+@app.route("/api/bibliografia")
+@login_required
+def get_bibliografia():
+    """Obtiene todas las entradas de la bibliografía."""
+    entries = database.get_all_bibliografia()
+    return jsonify(entries)
+
+@app.route("/api/bibliografia/add", methods=['POST'])
+@login_required
+def add_bibliografia():
+    """Añade una nueva entrada a la bibliografía."""
+    data = request.json
+    try:
+        entry_id = database.add_bibliografia_entry(data['titulo'], data['tipo'], data['contenido'])
+        if entry_id:
+            return jsonify({'success': True, 'id': entry_id})
+        else:
+            return jsonify({'success': False, 'error': 'No se pudo crear la entrada'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route("/api/bibliografia/<int:entry_id>/update", methods=['POST'])
+@login_required
+def update_bibliografia(entry_id):
+    """Actualiza una entrada de la bibliografía."""
+    data = request.json
+    try:
+        success = database.update_bibliografia_entry(entry_id, data['titulo'], data['tipo'], data['contenido'])
+        if success:
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': 'No se pudo actualizar la entrada'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route("/api/bibliografia/<int:entry_id>/delete", methods=['POST'])
+@login_required
+def delete_bibliografia(entry_id):
+    """Elimina una entrada de la bibliografía."""
+    try:
+        success = database.delete_bibliografia_entry(entry_id)
+        if success:
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': 'No se pudo eliminar la entrada'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route("/api/chat", methods=['POST'])
 @login_required
 def chat_with_ai():
