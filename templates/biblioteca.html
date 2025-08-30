@@ -3,62 +3,140 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Biblioteca de Referencias</title>
+    <title>Biblioteca - ELMEfood</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: sans-serif; padding: 2em; max-width: 900px; margin: auto; }
-        h1 { color: #333; }
-        nav a { text-decoration: none; color: #007bff; font-weight: bold; margin: 0 10px; }
-        #search-box {
+        :root {
+            --bg-color: #1a1a1a;
+            --card-bg: #2c2c2c;
+            --text-color: #f0f0f0;
+            --primary-color: #fca311;
+            --primary-hover: #e89204;
+            --border-color: #444;
+            --text-muted: #888;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+        .navbar {
+            background-color: var(--card-bg);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .navbar-brand { font-weight: 700; font-size: 1.2em; }
+        .navbar-brand span { color: var(--primary-color); }
+        .navbar-menu a {
+            color: var(--text-muted);
+            text-decoration: none;
+            margin-left: 20px;
+            font-weight: 500;
+            transition: color 0.2s ease;
+        }
+        .navbar-menu a:hover, .navbar-menu a.active { color: var(--primary-color); }
+        .user-info a {
+            background-color: var(--danger-color);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 700;
+            transition: background-color 0.2s ease;
+        }
+        .user-info a:hover { background-color: #c82333; }
+        .main-container { padding: 40px; max-width: 1200px; margin: auto; }
+        .card {
+            background-color: var(--card-bg);
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 1.5em;
+        }
+        .card h1, .card h2, .card h3 {
+            margin-top: 0;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        input, select, button, textarea {
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: #333;
+            color: var(--text-color);
+            font-size: 1rem;
             width: 100%;
-            padding: 12px;
-            margin: 2em 0;
             box-sizing: border-box;
-            font-size: 1.1em;
-            border: 1px solid #ccc;
-            border-radius: 4px;
         }
         .entry {
-            border: 1px solid #eee;
-            padding: 1.5em;
+            border-bottom: 1px solid var(--border-color);
+            padding: 1.5em 0;
             margin-bottom: 1.5em;
-            border-radius: 8px;
-            background-color: #fdfdfd;
         }
-        .entry h2 { margin-top: 0; }
+        .entry:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        .entry h2 { 
+            margin-top: 0;
+            color: var(--primary-color);
+        }
         .entry-type {
             display: inline-block;
             padding: 4px 8px;
-            background-color: #e9ecef;
-            color: #495057;
+            background-color: var(--primary-color);
+            color: var(--bg-color);
             border-radius: 4px;
             font-size: 0.8em;
             margin-bottom: 1em;
+            font-weight: 700;
         }
     </style>
 </head>
 <body>
 
-    <nav>
-        <a href="/">Formulador</a> |
-        <a href="/biblioteca">Biblioteca</a> |
-        <a href="/gestion_ingredientes">Gestión de Ingredientes</a> |
-        <a href="/gestion_bibliografia">Gestión de Bibliografía</a>
-    </nav>
-    <hr>
-
-    <h1>Biblioteca de Referencias</h1>
-    <input type="text" id="search-box" placeholder="Buscar en la biblioteca...">
-
-    <div id="entries-container">
+    <nav class="navbar">
+        <div class="navbar-brand">ELME<span>food</span></div>
+        <div class="navbar-menu">
+            <a href="{{ url_for('index') }}">Formulador</a>
+            <a href="{{ url_for('biblioteca_page') }}" class="active">Biblioteca</a>
+            <a href="{{ url_for('gestion_ingredientes_page') }}">Ingredientes</a>
+            <a href="{{ url_for('gestion_bibliografia_page') }}">Bibliografía</a>
         </div>
+        <div class="user-info">
+            <a href="{{ url_for('logout') }}">Cerrar Sesión</a>
+        </div>
+    </nav>
+
+    <div class="main-container">
+        <div class="card">
+            <h1>Biblioteca de Referencias</h1>
+            <input type="text" id="search-box" placeholder="Buscar en la biblioteca...">
+        </div>
+        <div class="card">
+            <div id="entries-container">
+                <!-- Las entradas se cargarán aquí -->
+            </div>
+        </div>
+    </div>
 
     <script>
         const searchBox = document.getElementById('search-box');
         const entriesContainer = document.getElementById('entries-container');
         let allEntries = []; // Guardaremos todas las entradas aquí para filtrar
 
-        // --- FUNCIÓN PARA MOSTRAR LAS ENTRADAS ---
-        function displayEntries(entriesToDisplay) {
+        // --- FUNCIÓN PARA MOSTRAR LAS ENTRADAS ---\n        function displayEntries(entriesToDisplay) {
             entriesContainer.innerHTML = ''; // Limpiar
             if (entriesToDisplay.length === 0) {
                 entriesContainer.innerHTML = '<p>No se encontraron resultados.</p>';
@@ -96,7 +174,6 @@
             }
             const filteredEntries = allEntries.filter(entry => {
                 const titleMatch = entry.titulo.toLowerCase().includes(query);
-
                 const contentMatch = entry.contenido.toLowerCase().includes(query);
                 return titleMatch || contentMatch;
             });

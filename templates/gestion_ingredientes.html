@@ -3,63 +3,155 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Ingredientes</title>
+    <title>Gestión de Ingredientes - ELMEfood</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: sans-serif; padding: 2em; max-width: 1200px; margin: auto; }
-        h1, h2 { color: #333; }
-        nav a { text-decoration: none; color: #007bff; font-weight: bold; margin: 0 10px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 2em; table-layout: fixed; }
-        th, td { border: 1px solid #ddd; padding: 8px; vertical-align: top; word-wrap: break-word; }
-        th { background-color: #f2f2f2; }
-        #ingredient-form-container { margin-top: 2em; padding: 1.5em; border: 1px solid #ccc; border-radius: 8px; background-color: #f9f9f9; }
-        #ingredient-form input { padding: 8px; margin: 5px; }
-        .btn { padding: 8px 15px; color: white; border: none; cursor: pointer; border-radius: 4px; }
-        .btn-primary { background-color: #007bff; }
-        .btn-success { background-color: #28a745; }
-        .btn-secondary { background-color: #6c757d; }
-        .btn-edit { background-color: #28a745; color: white; padding: 5px 10px; margin-right: 5px; }
-        .btn-delete { background-color: #dc3545; color: white; padding: 5px 10px; }
+        :root {
+            --bg-color: #1a1a1a;
+            --card-bg: #2c2c2c;
+            --text-color: #f0f0f0;
+            --primary-color: #fca311;
+            --primary-hover: #e89204;
+            --border-color: #444;
+            --text-muted: #888;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+        .navbar {
+            background-color: var(--card-bg);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .navbar-brand { font-weight: 700; font-size: 1.2em; }
+        .navbar-brand span { color: var(--primary-color); }
+        .navbar-menu a {
+            color: var(--text-muted);
+            text-decoration: none;
+            margin-left: 20px;
+            font-weight: 500;
+            transition: color 0.2s ease;
+        }
+        .navbar-menu a:hover, .navbar-menu a.active { color: var(--primary-color); }
+        .user-info a {
+            background-color: var(--danger-color);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 700;
+            transition: background-color 0.2s ease;
+        }
+        .user-info a:hover { background-color: #c82333; }
+        .main-container { padding: 40px; max-width: 1200px; margin: auto; }
+        .card {
+            background-color: var(--card-bg);
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 1.5em;
+        }
+        .card h1, .card h2, .card h3 {
+            margin-top: 0;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        input, select, button, textarea {
+            padding: 10px;
+            margin: 5px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: #333;
+            color: var(--text-color);
+            font-size: 1rem;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button { cursor: pointer; border: none; font-weight: 700; transition: background-color 0.2s ease; width: auto; }
+        .btn-primary { background-color: var(--primary-color); color: var(--bg-color); }
+        .btn-primary:hover { background-color: var(--primary-hover); }
+        .btn-success { background-color: var(--success-color); color: white; }
+        .btn-secondary { background-color: #6c757d; color: white; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1em; }
+        th, td { border: 1px solid var(--border-color); padding: 12px; text-align: left; }
+        th { background-color: #333; }
+        .btn-edit { background-color: var(--success-color); }
+        .btn-delete { background-color: var(--danger-color); }
+        .btn-edit, .btn-delete { padding: 5px 10px; color: white; border-radius: 4px; }
+        #ingredient-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            align-items: center;
+        }
+        #ingredient-form button {
+            grid-column: 1 / -1; /* Span across all columns */
+        }
     </style>
 </head>
 <body>
-    <nav>
-        <a href="/">Formulador</a> |
-        <a href="/biblioteca">Biblioteca</a> |
-        <a href="/gestion_ingredientes">Gestión de Ingredientes</a> |
-        <a href="/gestion_bibliografia">Gestión de Bibliografía</a>
-    </nav>
-    <hr>
-    <h1>Gestión de Ingredientes Maestros</h1>
 
-    <div id="ingredient-form-container">
-        <h2 id="form-title">Añadir Nuevo Ingrediente</h2>
-        <form id="ingredient-form">
-            <input type="text" id="form-name" placeholder="Nombre" required>
-            <input type="number" id="form-protein" placeholder="% Proteína" step="0.01">
-            <input type="number" id="form-fat" placeholder="% Grasa" step="0.01">
-            <input type="number" id="form-water" placeholder="% Agua" step="0.01">
-            <input type="number" id="form-retention" placeholder="Factor Ret." step="0.01">
-            <input type="number" id="form-price" placeholder="Precio/kg" step="0.01">
-            <button type="submit" id="submit-btn" class="btn btn-primary">Guardar</button>
-            <button type="button" id="cancel-btn" class="btn btn-secondary" style="display: none;">Cancelar</button>
-        </form>
+    <nav class="navbar">
+        <div class="navbar-brand">ELME<span>food</span></div>
+        <div class="navbar-menu">
+            <a href="{{ url_for('index') }}">Formulador</a>
+            <a href="{{ url_for('biblioteca_page') }}">Biblioteca</a>
+            <a href="{{ url_for('gestion_ingredientes_page') }}" class="active">Ingredientes</a>
+            <a href="{{ url_for('gestion_bibliografia_page') }}">Bibliografía</a>
+        </div>
+        <div class="user-info">
+            <a href="{{ url_for('logout') }}">Cerrar Sesión</a>
+        </div>
+    </nav>
+
+    <div class="main-container">
+        <div class="card">
+            <h1>Gestión de Ingredientes Maestros</h1>
+            <div id="ingredient-form-container">
+                <h2 id="form-title">Añadir Nuevo Ingrediente</h2>
+                <form id="ingredient-form">
+                    <input type="text" id="form-name" placeholder="Nombre" required>
+                    <input type="number" id="form-protein" placeholder="% Proteína" step="0.01">
+                    <input type="number" id="form-fat" placeholder="% Grasa" step="0.01">
+                    <input type="number" id="form-water" placeholder="% Agua" step="0.01">
+                    <input type="number" id="form-retention" placeholder="Factor Ret." step="0.01">
+                    <input type="number" id="form-price" placeholder="Precio/kg" step="0.01">
+                    <button type="submit" id="submit-btn" class="btn-primary">Guardar</button>
+                    <button type="button" id="cancel-btn" class="btn-secondary" style="display: none;">Cancelar</button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>Ingredientes Existentes</h2>
+            <table id="master-ingredients-table">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>% Proteína</th>
+                        <th>% Grasa</th>
+                        <th>% Agua</th>
+                        <th>Factor Ret.</th>
+                        <th>Precio/kg</th>
+                        <th>Categoría (IA)</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
     </div>
-    
-    <table id="master-ingredients-table">
-        <thead>
-            <tr>
-                <th>Nombre</th>
-                <th>% Proteína</th>
-                <th>% Grasa</th>
-                <th>% Agua</th>
-                <th>Factor Ret.</th>
-                <th>Precio/kg</th>
-                <th>Categoría (IA)</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
 
     <script>
         const tableBody = document.querySelector("#master-ingredients-table tbody");
@@ -79,7 +171,7 @@
             document.getElementById('form-retention').value = ingredient.water_retention_factor || '';
             document.getElementById('form-price').value = ingredient.precio_por_kg || '';
             submitBtn.textContent = 'Actualizar';
-            submitBtn.className = 'btn btn-success';
+            submitBtn.className = 'btn-success';
             cancelBtn.style.display = 'inline-block';
         }
 
@@ -88,7 +180,7 @@
             formTitle.textContent = 'Añadir Nuevo Ingrediente';
             ingredientForm.reset();
             submitBtn.textContent = 'Guardar';
-            submitBtn.className = 'btn btn-primary';
+            submitBtn.className = 'btn-primary';
             cancelBtn.style.display = 'none';
         }
 

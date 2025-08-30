@@ -15,6 +15,7 @@
             --primary-color: #fca311; /* Un dorado/naranja del logo */
             --primary-hover: #e89204;
             --border-color: #444;
+            --danger-color: #dc3545;
         }
         body { 
             font-family: 'Inter', sans-serif;
@@ -107,7 +108,7 @@
             margin-bottom: 20px; 
             border-radius: 8px; 
             color: #f2dede; 
-            background-color: #a94442; 
+            background-color: var(--danger-color); 
         }
         .links { 
             margin-top: 20px; 
@@ -127,7 +128,6 @@
 <body>
     <div class="login-wrapper">
         <div class="header-container">
-            <!-- IMPORTANTE: Reemplaza esta URL con la URL de tu logo -->
             <img src="https://elmefood.com/wp-content/uploads/2025/08/An-oil-painting-of-the-Food-Consulting-Company-ELME-logo-high-contrast-composition-creating-tension-featuring-rich-textures-and-visible-brushstrokes-illuminated-by-intense-dramatic-lighting-1.jpg" alt="Logo ELME" class="logo">
             <h1 class="welcome-title">Formulador de Productos Cárnicos</h1>
         </div>
