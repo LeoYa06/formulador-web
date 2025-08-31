@@ -33,7 +33,16 @@
             align-items: center;
             border-bottom: 1px solid var(--border-color);
         }
-        .navbar-brand { font-weight: 700; font-size: 1.2em; }
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            font-weight: 700;
+            font-size: 1.2em;
+        }
+        .navbar-brand img {
+            height: 40px; /* Adjust as needed */
+            margin-right: 10px;
+        }
         .navbar-brand span { color: var(--primary-color); }
         .navbar-menu a {
             color: var(--text-muted);
@@ -117,7 +126,10 @@
 <body>
 
     <nav class="navbar">
-        <div class="navbar-brand">ELME<span>food</span></div>
+        <div class="navbar-brand">
+            <img src="https://elmefood.com/wp-content/uploads/2025/08/An-oil-painting-of-the-Food-Consulting-Company-ELME-logo-high-contrast-composition-creating-tension-featuring-rich-textures-and-visible-brushstrokes-illuminated-by-intense-dramatic-lighting-1.jpg" alt="ELMEfood Logo">
+            ELME<span>food</span>
+        </div>
         <div class="navbar-menu">
             <a href="{{ url_for('index') }}" class="active">Formulador</a>
             <a href="{{ url_for('biblioteca_page') }}">Biblioteca</a>
@@ -164,7 +176,7 @@
                             </div>
                             <input type="number" id="ing-qty" placeholder="Cantidad" step="0.01" required>
                             <select id="ing-unit" required><option value="kg">kg</option><option value="g">g</option></select>
-                            <button type="submit" id="ingredient-submit-btn" class="btn-primary">Añadir</button>
+                            <button type="submit" class="btn-primary">Añadir</button>
                             <button type="button" id="cancel-edit-btn" class="btn-secondary" style="display: none;">Cancelar</button>
                         </form>
                     </div>
