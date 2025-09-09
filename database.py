@@ -192,6 +192,32 @@ def get_user_by_username(username: str, verification_code: str = None) -> dict |
         return dict(user)
     return None
 
+# Este código va en tu archivo database.py
+
+def verify_user(email):
+    """
+    Actualiza el estado del usuario a 'verificado' en la base de datos,
+    y limpia el código de verificación y su fecha de expiración.
+    """
+    # La consulta SQL para actualizar al usuario
+    sql = "UPDATE users SET is_verified = TRUE, verification_code = NULL, code_expiry = NULL WHERE username = %s"
+    
+    try:
+        # La forma en que te conectas y ejecutas puede variar un poco,
+        # adapta esto a como lo haces en tus otras funciones (add_user, etc.)
+        conn = get_db_connection()  # O como sea tu función para conectar
+        cursor = conn.cursor()
+        cursor.execute(sql, (email,)) # Ejecuta el comando con el email
+        conn.commit() # Guarda los cambios en la base de datos
+        cursor.close()
+        conn.close()
+        return True # Devuelve True si todo salió bien
+    except Exception as e:
+        print(f"Error al verificar el usuario: {e}")
+        # En caso de error, es buena idea deshacer los cambios
+        conn.rollback() 
+        return False # Devuelve False si hubo un error
+
 def get_user_by_id(user_id: int) -> dict | None:
     """Busca un usuario por su ID."""
     conn = get_db_connection()
