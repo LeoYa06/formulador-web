@@ -91,7 +91,7 @@ def register():
             
             # 3. Enviar el correo electrónico con SendGrid
             message = Mail(
-                from_email='no-reply@tu-dominio.com', # Un correo verificado en tu cuenta de SendGrid
+                from_email='info@elmefood.com', # Un correo verificado en tu cuenta de SendGrid
                 to_emails=username,
                 subject='Código de Verificación - Formulador de Embutidos',
                 html_content=f'<h3>Hola {full_name},</h3><p>Gracias por registrarte. Tu código de verificación es: <strong>{verification_code}</strong></p><p>Este código es válido por 15 minutos.</p>'
