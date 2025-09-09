@@ -25,7 +25,10 @@ def initialize_database():
             id SERIAL PRIMARY KEY,
             username TEXT NOT NULL UNIQUE, /* Correo electrónico */
             password_hash TEXT NOT NULL,
-            full_name TEXT 
+            full_name TEXT,
+            is_verified BOOLEAN DEFAULT FALSE,
+            verification_code TEXT,
+            code_expiry TIMESTAMP
         );
     ''') 
    
@@ -37,6 +40,22 @@ def initialize_database():
     except psycopg2.errors.DuplicateColumn:
         conn.rollback()
         print("INFO: La columna 'full_name' ya existía.")
+        pass
+
+    # Añadir columnas de verificación si no existen
+    try:
+        cursor.execute('ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT FALSE;')
+        cursor.execute('ALTER TABLE users ADD COLUMN verification_code TEXT;')
+        cursor.execute('ALTER TABLE users ADD COLUMN code_expiry TIMESTAMP;')
+        conn.commit()
+        print("Columnas de verificación añadidas a la tabla 'users'.")
+    except psycopg2.errors.DuplicateColumn:
+        conn.rollback()
+        print("INFO: Las columnas de verificación ya existían.")
+        pass
+    except Exception as e:
+        conn.rollback()
+        print(f"ERROR: No se pudieron añadir las columnas de verificación: {e}")
         pass
    
     # 2. Crear tabla de fórmulas
@@ -128,12 +147,12 @@ def initialize_database():
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # ... (aquí va tu función initialize_database() que ya tienes) ...
-
 # --- Funciones para Usuarios ---
-def add_user(username: str, password: str, full_name: str) -> bool:
+def add_user(username: str, password: str, full_name: str, verification_code: str = None, code_expiry: datetime = None) -> bool:
     """
     Añade un nuevo usuario a la base de datos.
     Hashea la contraseña para un almacenamiento seguro.
+    Guarda el código de verificación y su expiración.
     Devuelve True si fue exitoso, False si el usuario ya existe.
     """
     conn = get_db_connection()
@@ -142,8 +161,8 @@ def add_user(username: str, password: str, full_name: str) -> bool:
     password_hash = generate_password_hash(password)
     try:
         cursor.execute(
-            "INSERT INTO users (username, password_hash, full_name) VALUES (%s, %s, %s)",
-            (username, password_hash, full_name)
+            "INSERT INTO users (username, password_hash, full_name, verification_code, code_expiry) VALUES (%s, %s, %s, %s, %s)",
+            (username, password_hash, full_name, verification_code, code_expiry)
         )
         conn.commit()
         return True
@@ -154,15 +173,18 @@ def add_user(username: str, password: str, full_name: str) -> bool:
         cursor.close()
         conn.close()
 
-def get_user_by_username(username: str) -> dict | None:
+def get_user_by_username(username: str, verification_code: str = None) -> dict | None:
     """
-    Busca un usuario por su nombre de usuario.
+    Busca un usuario por su nombre de usuario (email).
+    Opcionalmente, puede buscar por código de verificación.
     Devuelve los datos del usuario (incluyendo el hash de la contraseña) o None si no se encuentra.
     """
     conn = get_db_connection()
-    # Usamos DictCursor para obtener los resultados como un diccionario fácil de usar
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+    if verification_code:
+        cursor.execute("SELECT * FROM users WHERE username = %s AND verification_code = %s", (username, verification_code))
+    else:
+        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
     user = cursor.fetchone()
     cursor.close()
     conn.close()
@@ -181,6 +203,28 @@ def get_user_by_id(user_id: int) -> dict | None:
     if user:
         return dict(user)
     return None
+
+def verify_user(username: str) -> bool:
+    """
+    Marca a un usuario como verificado en la base de datos.
+    Devuelve True si la actualización fue exitosa, False en caso contrario.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE users SET is_verified = TRUE, verification_code = NULL, code_expiry = NULL WHERE username = %s",
+            (username,)
+        )
+        conn.commit()
+        return cursor.rowcount > 0 # Devuelve True si se actualizó una fila
+    except Exception as e:
+        print(f"ERROR al verificar usuario: {e}")
+        conn.rollback()
+        return False
+    finally:
+        cursor.close()
+        conn.close()
 
 # --- Funciones para Fórmulas ---
 def get_all_formulas(user_id: int) -> list[dict]:

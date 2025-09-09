@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Verificar Cuenta</title>
+    </head>
+<body>
+    <h2>Verifica tu Cuenta</h2>
+    <p>Hemos enviado un código de 6 dígitos a <strong>{{ email }}</strong>.</p>
+    
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <ul>
+        {% for message in messages %}
+          <li>{{ message }}</li>
+        {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('verify', email=email) }}">
+        <label for="verification_code">Código de Verificación:</label>
+        <input type="text" id="verification_code" name="verification_code" required maxlength="6">
+        <button type="submit">Verificar</button>
+    </form>
+</body>
+</html>

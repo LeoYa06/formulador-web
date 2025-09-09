@@ -1,5 +1,9 @@
 # app.py
 import os
+import random
+from datetime import datetime, timedelta
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 from flask import Flask, render_template, jsonify, request, flash, redirect, url_for
 from werkzeug.security import check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -31,10 +35,11 @@ login_manager.login_view = 'login'
 login_manager.login_message = "Por favor, inicia sesión para acceder a esta página."
 
 class User(UserMixin):
-    def __init__(self, id, username, full_name):
+    def __init__(self, id, username, full_name, is_verified=False):
         self.id = id
         self.username = username
         self.full_name = full_name
+        self.is_verified = is_verified
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -43,7 +48,8 @@ def load_user(user_id):
         return User(
             id=user_data['id'],
             username=user_data['username'],
-            full_name=user_data.get('full_name', '')
+            full_name=user_data.get('full_name', ''),
+            is_verified=user_data.get('is_verified', False)
         )
     return None
 
@@ -57,7 +63,7 @@ def register():
     
     if request.method == 'POST':
         full_name = request.form.get('full_name')
-        username = request.form.get('username')   # Correo
+        username = request.form.get('username')  # Correo
         password = request.form.get('password')
         confirm_password = request.form.get('confirm_password')
 
@@ -73,12 +79,38 @@ def register():
             flash('Este correo electrónico ya está registrado.')
             return redirect(url_for('register'))
         
-        if database.add_user(username, password, full_name):
-            flash('¡Cuenta creada con éxito! Ahora puedes iniciar sesión.')
-            return redirect(url_for('login'))
+        # --- NUEVA LÓGICA DE VERIFICACIÓN ---
+        
+        # 1. Generar código y fecha de expiración
+        verification_code = str(random.randint(100000, 999999))
+        code_expiry = datetime.utcnow() + timedelta(minutes=15)
+
+        # 2. Guardar el usuario como NO VERIFICADO
+        # ¡Importante! Debes modificar tu función `database.add_user` para aceptar estos nuevos campos.
+        if database.add_user(username, password, full_name, verification_code, code_expiry):
+            
+            # 3. Enviar el correo electrónico con SendGrid
+            message = Mail(
+                from_email='no-reply@tu-dominio.com', # Un correo verificado en tu cuenta de SendGrid
+                to_emails=username,
+                subject='Código de Verificación - Formulador de Embutidos',
+                html_content=f'<h3>Hola {full_name},</h3><p>Gracias por registrarte. Tu código de verificación es: <strong>{verification_code}</strong></p><p>Este código es válido por 15 minutos.</p>'
+            )
+            try:
+                sendgrid_client = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
+                sendgrid_client.send(message)
+            except Exception as e:
+                # En un caso real, aquí deberías manejar el error (ej. registrarlo)
+                print(f"Error enviando correo: {e}")
+                flash('Ocurrió un error al enviar el correo de verificación.')
+                return redirect(url_for('register'))
+
+            flash('¡Cuenta creada! Te hemos enviado un código de verificación a tu correo.')
+            # 4. Redirigir a la página de verificación
+            return redirect(url_for('verify', email=username))
         else:
             flash('Ocurrió un error al crear la cuenta.')
-    
+
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -94,10 +126,18 @@ def login():
         user_data = database.get_user_by_username(username)
 
         if user_data and check_password_hash(user_data['password_hash'], password):
+            # --- NUEVA LÓGICA DE VERIFICACIÓN EN LOGIN ---
+            if not user_data.get('is_verified'):
+                flash('Tu cuenta no está verificada. Por favor, revisa tu correo electrónico para encontrar el código de verificación.')
+                # Redirigimos al usuario a la página de verificación para que pueda activar su cuenta.
+                return redirect(url_for('verify', email=username))
+
+            # Si el usuario está verificado, procedemos con el login normal.
             user = User(
                 id=user_data['id'],
                 username=user_data['username'],
-                full_name=user_data.get('full_name', '')
+                full_name=user_data.get('full_name', ''),
+                is_verified=user_data.get('is_verified')
             )
             login_user(user)
             next_page = request.args.get('next')
@@ -433,5 +473,3 @@ with app.app_context():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
-
-
