@@ -377,27 +377,27 @@ def verify():
         user = database.get_user_by_username(email)
 
         if not user:
-            flash(_('Usuario no encontrado.'))
+            flash('Usuario no encontrado.')
             return redirect(url_for('register'))
         
         # --- CAMBIOS AQUÍ ---
         
         if user['is_verified']:  # CORREGIDO
-            flash(_('Tu cuenta ya ha sido verificada. Por favor, inicia sesión.'))
+            flash('Tu cuenta ya ha sido verificada. Por favor, inicia sesión.')
             return redirect(url_for('login'))
         
         # Comprobar si el código ha expirado
         # Asegúrate de que tu función get_user_by_username también devuelve code_expiry
         if datetime.utcnow() > user['code_expiry']:  # CORREGIDO
-            flash(_('Tu código de verificación ha expirado. Por favor, solicita uno nuevo.'))
+            flash('Tu código de verificación ha expirado. Por favor, solicita uno nuevo.')
             return redirect(url_for('verify', email=email))
 
         if user['verification_code'] == code:  # CORREGIDO
             database.verify_user(email)
-            flash(_('¡Verificación exitosa! Ahora puedes iniciar sesión.'))
+            flash('¡Verificación exitosa! Ahora puedes iniciar sesión.')
             return redirect(url_for('login'))
         else:
-            flash(_('El código de verificación es incorrecto. Inténtalo de nuevo.'))
+            flash(('El código de verificación es incorrecto. Inténtalo de nuevo.'))
 
     return render_template('verify.html', email=email) 
 
