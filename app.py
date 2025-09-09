@@ -368,37 +368,38 @@ def chat_with_ai():
 @app.route('/verify', methods=['GET', 'POST'])
 def verify():
     """Maneja la verificación del código enviado por correo."""
-    email = request.args.get('email') # Obtiene el email de la URL
+    email = request.args.get('email')
     if not email:
-        return redirect(url_for('register')) # Si no hay email, redirige a registro
+        return redirect(url_for('register'))
 
     if request.method == 'POST':
         code = request.form.get('verification_code')
         user = database.get_user_by_username(email)
 
         if not user:
-            flash('Usuario no encontrado.')
+            flash(_('Usuario no encontrado.'))
             return redirect(url_for('register'))
         
-        if user.is_verified:
-            flash('Tu cuenta ya ha sido verificada. Por favor, inicia sesión.')
+        # --- CAMBIOS AQUÍ ---
+        
+        if user['is_verified']:  # CORREGIDO
+            flash(_('Tu cuenta ya ha sido verificada. Por favor, inicia sesión.'))
             return redirect(url_for('login'))
         
         # Comprobar si el código ha expirado
-        if datetime.utcnow() > user.code_expiry:
-            flash('Tu código de verificación ha expirado. Por favor, solicita uno nuevo.')
-            # Aquí podrías añadir lógica para reenviar un nuevo código
+        # Asegúrate de que tu función get_user_by_username también devuelve code_expiry
+        if datetime.utcnow() > user['code_expiry']:  # CORREGIDO
+            flash(_('Tu código de verificación ha expirado. Por favor, solicita uno nuevo.'))
             return redirect(url_for('verify', email=email))
 
-        if user.verification_code == code:
-            # ¡Código correcto! Verificamos al usuario.
-            database.verify_user(email) # Necesitarás crear esta función en database.py
-            flash('¡Verificación exitosa! Ahora puedes iniciar sesión.')
+        if user['verification_code'] == code:  # CORREGIDO
+            database.verify_user(email)
+            flash(_('¡Verificación exitosa! Ahora puedes iniciar sesión.'))
             return redirect(url_for('login'))
         else:
-            flash('El código de verificación es incorrecto. Inténtalo de nuevo.')
+            flash(_('El código de verificación es incorrecto. Inténtalo de nuevo.'))
 
-    return render_template('verify.html', email=email)  
+    return render_template('verify.html', email=email) 
 
     # 1. Obtener toda la bibliografía de la base de datos
     bibliografia_entries = database.get_all_bibliografia()
