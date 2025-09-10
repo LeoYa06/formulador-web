@@ -1,9 +1,11 @@
 # app.py
 import os
 import random
+import secrets
 from datetime import datetime, timedelta
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
+from flask import session
 from flask import Flask, render_template, jsonify, request, flash, redirect, url_for
 from werkzeug.security import check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -126,13 +128,23 @@ def login():
         user_data = database.get_user_by_username(username)
 
         if user_data and check_password_hash(user_data['password_hash'], password):
-            # --- NUEVA LÓGICA DE VERIFICACIÓN EN LOGIN ---
             if not user_data.get('is_verified'):
-                flash('Tu cuenta no está verificada. Por favor, revisa tu correo electrónico para encontrar el código de verificación.')
-                # Redirigimos al usuario a la página de verificación para que pueda activar su cuenta.
+                flash('Tu cuenta no está verificada. Por favor, revisa tu correo electrónico.')
                 return redirect(url_for('verify', email=username))
 
-            # Si el usuario está verificado, procedemos con el login normal.
+            # --- NUEVA LÓGICA DE TOKEN DE SESIÓN ---
+
+            # 1. Crear un token seguro y único
+            session_token = secrets.token_hex(32)
+
+            # 2. Guardar el nuevo token en la base de datos para este usuario
+            #    (Necesitarás crear esta función en database.py)
+            database.update_session_token(user_data['id'], session_token)
+
+            # 3. Guardar el token también en la sesión del navegador
+            session['session_token'] = session_token
+            
+            # Procedemos con el login normal
             user = User(
                 id=user_data['id'],
                 username=user_data['username'],
@@ -146,7 +158,6 @@ def login():
             flash('Login incorrecto. Revisa tu email y contraseña.')
 
     return render_template('login.html')
-
 @app.route('/logout')
 @login_required
 def logout():
@@ -509,3 +520,21 @@ with app.app_context():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
+
+@app.before_request
+def check_session():
+    # Solo ejecutar si el usuario está logueado
+    if current_user.is_authenticated:
+        # Obtener el token guardado en la sesión del navegador
+        browser_session_token = session.get('session_token')
+        
+        # Obtener el token "oficial" guardado en la base de datos
+        # (Necesitarás crear esta función en database.py)
+        db_session_token = database.get_session_token_for_user(current_user.id)
+
+        # Si no hay token en el navegador o si no coincide con el de la BD,
+        # significa que se ha iniciado sesión en otro lugar.
+        if browser_session_token != db_session_token:
+            logout_user()
+            flash("Has iniciado sesión en otro dispositivo. Esta sesión ha sido cerrada.")
+            return redirect(url_for('login'))

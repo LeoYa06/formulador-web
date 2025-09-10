@@ -532,3 +532,39 @@ def search_bibliografia(query: str, limit: int = 3) -> list[dict]:
     cursor.close()
     conn.close()
     return results
+
+# Add this function to database.py
+def update_session_token(user_id, token):
+    """Actualiza el token de sesión de un usuario en la base de datos."""
+    sql = "UPDATE users SET session_token = %s WHERE id = %s"
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql, (token, user_id))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error updating session token: {e}")
+        conn.rollback()
+        return False
+    
+# Add this function to database.py
+def get_session_token_for_user(user_id):
+    """Obtiene el token de sesión actual de un usuario desde la base de datos."""
+    sql = "SELECT session_token FROM users WHERE id = %s"
+    token = None
+    try:
+        conn = get_db_connection()
+        # Usamos un cursor que devuelve diccionarios para poder hacer ['session_token']
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cursor.execute(sql, (user_id,))
+        result = cursor.fetchone()
+        if result:
+            token = result['session_token']
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print(f"Error getting session token: {e}")
+    return token
