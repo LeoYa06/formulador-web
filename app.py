@@ -89,7 +89,6 @@ def register():
         code_expiry = datetime.utcnow() + timedelta(minutes=15)
 
         # 2. Guardar el usuario como NO VERIFICADO
-        # ¡Importante! Debes modificar tu función `database.add_user` para aceptar estos nuevos campos.
         if database.add_user(username, password, full_name, verification_code, code_expiry):
             
             # 3. Enviar el correo electrónico con SendGrid
@@ -103,13 +102,11 @@ def register():
                 sendgrid_client = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
                 sendgrid_client.send(message)
             except Exception as e:
-                # En un caso real, aquí deberías manejar el error (ej. registrarlo)
                 print(f"Error enviando correo: {e}")
                 flash('Ocurrió un error al enviar el correo de verificación.')
                 return redirect(url_for('register'))
 
             flash('¡Cuenta creada! Te hemos enviado un código de verificación a tu correo.')
-            # 4. Redirigir a la página de verificación
             return redirect(url_for('verify', email=username))
         else:
             flash('Ocurrió un error al crear la cuenta.')
@@ -133,19 +130,10 @@ def login():
                 flash('Tu cuenta no está verificada. Por favor, revisa tu correo electrónico.')
                 return redirect(url_for('verify', email=username))
 
-            # --- NUEVA LÓGICA DE TOKEN DE SESIÓN ---
-
-            # 1. Crear un token seguro y único
             session_token = secrets.token_hex(32)
-
-            # 2. Guardar el nuevo token en la base de datos para este usuario
-            #    (Necesitarás crear esta función en database.py)
             database.update_session_token(user_data['id'], session_token)
-
-            # 3. Guardar el token también en la sesión del navegador
             session['session_token'] = session_token
             
-            # Procedemos con el login normal
             user = User(
                 id=user_data['id'],
                 username=user_data['username'],
@@ -159,6 +147,7 @@ def login():
             flash('Login incorrecto. Revisa tu email y contraseña.')
 
     return render_template('login.html')
+
 @app.route('/logout')
 @login_required
 def logout():
@@ -190,7 +179,6 @@ def gestion_bibliografia_page():
 
 
 # --- 5. RUTAS DE API ---
-# (Aquí van todas tus rutas de API que ya tenías, no es necesario copiarlas de nuevo si ya están bien)
 @app.route("/api/formulas")
 @login_required
 def get_formulas():
@@ -244,7 +232,8 @@ def delete_formula_route(formula_id):
 def add_ingredient(formula_id):
     data = request.json
     name, quantity, unit = data.get('name'), data.get('quantity'), data.get('unit')
-    database.add_ingredient_to_formula(formula_id, name, float(quantity), unit)
+    # Pasa el user_id a la función de la base de datos
+    database.add_ingredient_to_formula(formula_id, name, float(quantity), unit, current_user.id)
     return get_formula_details(formula_id)
 
 @app.route("/api/ingredient/<int:formula_ingredient_id>/update", methods=['POST'])
@@ -253,7 +242,8 @@ def update_ingredient_in_formula(formula_ingredient_id):
     parent_formula_id = database.get_formula_id_for_ingredient(formula_ingredient_id)
     data = request.json
     name, quantity, unit = data.get('name'), data.get('quantity'), data.get('unit')
-    database.update_ingredient(formula_ingredient_id, name, float(quantity), unit)
+    # Pasa el user_id a la función de la base de datos
+    database.update_ingredient(formula_ingredient_id, name, float(quantity), unit, current_user.id)
     return get_formula_details(parent_formula_id)
 
 @app.route("/api/ingredient/<int:formula_ingredient_id>/delete", methods=['POST'])
@@ -267,47 +257,56 @@ def delete_ingredient_from_formula(formula_ingredient_id):
 @login_required
 def search_ingredients():
     query = request.args.get('q', '')
-    return jsonify(database.search_ingredient_names(query))
+    # Llama a la nueva función y pasa el user_id
+    return jsonify(database.search_user_ingredient_names(query, current_user.id))
 
-# --- Rutas para Gestión de Ingredientes Maestros ---
+# --- Rutas para Gestión de Ingredientes de Usuario ---
 
 @app.route("/api/ingredientes")
 @login_required
-def get_master_ingredients():
-    """Obtiene todos los ingredientes de la tabla maestra."""
-    ingredients = database.get_all_ingredients_with_details()
+def get_user_ingredients_route():
+    """Obtiene todos los ingredientes del usuario actual."""
+    ingredients = database.get_user_ingredients(current_user.id)
     return jsonify(ingredients)
 
 @app.route("/api/ingredientes/add", methods=['POST'])
 @login_required
-def add_master_ingredient():
-    """Añade un nuevo ingrediente a la tabla maestra."""
+def add_user_ingredient_route():
+    """Añade un nuevo ingrediente a la colección del usuario."""
     data = request.json
     try:
-        database.add_master_ingredient(data)
+        database.add_user_ingredient(data, current_user.id)
         return jsonify({'success': True})
     except Exception as e:
-        # Aquí podrías loggear el error e
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route("/api/ingredientes/<int:ing_id>/update", methods=['POST'])
 @login_required
-def update_master_ingredient(ing_id):
-    """Actualiza un ingrediente en la tabla maestra."""
+def update_user_ingredient_route(ing_id):
+    """Actualiza un ingrediente en la colección del usuario."""
     data = request.json
     try:
-        database.update_master_ingredient(ing_id, data)
-        return jsonify({'success': True})
+        success = database.update_user_ingredient(ing_id, data, current_user.id)
+        if success:
+            return jsonify({'success': True})
+        else:
+            # Podría ser que el ingrediente no exista o no pertenezca al usuario
+            return jsonify({'success': False, 'error': 'No se pudo actualizar el ingrediente'}), 404
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route("/api/ingredientes/<int:ing_id>/delete", methods=['POST'])
 @login_required
-def delete_master_ingredient(ing_id):
-    """Elimina un ingrediente de la tabla maestra."""
+def delete_user_ingredient_route(ing_id):
+    """Elimina un ingrediente de la colección del usuario."""
     try:
-        database.delete_master_ingredient(ing_id)
-        return jsonify({'success': True})
+        result = database.delete_user_ingredient(ing_id, current_user.id)
+        if result == 'success':
+            return jsonify({'success': True})
+        elif result == 'in_use':
+            return jsonify({'success': False, 'error': 'El ingrediente está en uso en una o más fórmulas y no puede ser eliminado.'}), 409
+        else: # not_found
+            return jsonify({'success': False, 'error': 'Ingrediente no encontrado.'}), 404
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -377,46 +376,7 @@ def chat_with_ai():
     if not user_question:
         return jsonify({'answer': 'No se recibió ninguna pregunta.'}), 400
 
-@app.route('/verify', methods=['GET', 'POST'])
-def verify():
-    """Maneja la verificación del código enviado por correo."""
-    email = request.args.get('email')
-    if not email:
-        return redirect(url_for('register'))
-
-    if request.method == 'POST':
-        code = request.form.get('verification_code')
-        user = database.get_user_by_username(email)
-
-        if not user:
-            flash('Usuario no encontrado.')
-            return redirect(url_for('register'))
-        
-        # --- CAMBIOS AQUÍ ---
-        
-        if user['is_verified']:  # CORREGIDO
-            flash('Tu cuenta ya ha sido verificada. Por favor, inicia sesión.')
-            return redirect(url_for('login'))
-        
-        # Comprobar si el código ha expirado
-        # Asegúrate de que tu función get_user_by_username también devuelve code_expiry
-        if datetime.utcnow() > user['code_expiry']:  # CORREGIDO
-            flash('Tu código de verificación ha expirado. Por favor, solicita uno nuevo.')
-            return redirect(url_for('verify', email=email))
-
-        if user['verification_code'] == code:  # CORREGIDO
-            database.verify_user(email)
-            flash('¡Verificación exitosa! Ahora puedes iniciar sesión.')
-            return redirect(url_for('login'))
-        else:
-            flash(('El código de verificación es incorrecto. Inténtalo de nuevo.'))
-
-    return render_template('verify.html', email=email) 
-
-    # 1. Obtener toda la bibliografía de la base de datos
     bibliografia_entries = database.get_all_bibliografia()
-
-    # 2. Formatear la bibliografía para el prompt
     contexto_bibliografico = "\n\n".join([
         f"**Título:** {entry['titulo']}\n"
         f"**Tipo:** {entry['tipo']}\n"
@@ -424,8 +384,7 @@ def verify():
         for entry in bibliografia_entries
     ])
 
-    # 3. Crear un prompt más robusto con el contexto
-    prompt = f"""
+    prompt = f'''
     Eres un asistente experto en tecnología de alimentos y formulación de productos. Tu tarea es responder a las preguntas del usuario de la forma más completa y actualizada posible.
 
     Para ello, debes combinar información de tres fuentes:
@@ -443,7 +402,7 @@ def verify():
     --- FIN DE LA BIBLIOGRAFÍA ---
 
     **Pregunta del usuario:** "{user_question}"
-    """
+    '''
 
     try:
         response = model.generate_content(prompt)
@@ -453,6 +412,40 @@ def verify():
         return jsonify({'answer': f'Error al contactar el servicio de IA: {e}'}), 500
 
     return jsonify({'answer': ai_answer})
+
+@app.route('/verify', methods=['GET', 'POST'])
+def verify():
+    """Maneja la verificación del código enviado por correo."""
+    email = request.args.get('email')
+    if not email:
+        return redirect(url_for('register'))
+
+    if request.method == 'POST':
+        code = request.form.get('verification_code')
+        user = database.get_user_by_username(email)
+
+        if not user:
+            flash('Usuario no encontrado.')
+            return redirect(url_for('register'))
+        
+        if user['is_verified']:
+            flash('Tu cuenta ya ha sido verificada. Por favor, inicia sesión.')
+            return redirect(url_for('login'))
+        
+        if user.get('code_expiry') and datetime.utcnow() > user['code_expiry']:
+            flash('Tu código de verificación ha expirado. Por favor, solicita uno nuevo.')
+            return redirect(url_for('verify', email=email))
+
+        if user['verification_code'] == code:
+            database.verify_user(email)
+            # Llenar la tabla de ingredientes del usuario con los datos base
+            database.seed_initial_ingredients(user['id'])
+            flash('¡Verificación exitosa! Ahora puedes iniciar sesión.')
+            return redirect(url_for('login'))
+        else:
+            flash('El código de verificación es incorrecto. Inténtalo de nuevo.')
+
+    return render_template('verify.html', email=email)
 
 @app.route("/api/formula/<int:formula_id>/analyze", methods=['POST'])
 @login_required
@@ -470,19 +463,18 @@ def analyze_formula_route(formula_id):
     processed_ingredients = calculations.process_ingredients_for_display(formula_data.get('ingredients', []))
     totals = calculations.calculate_formula_totals(processed_ingredients)
 
-    # Construir el prompt para la IA
-    prompt = f"""
+    prompt = f'''
     Eres un experto en tecnología de alimentos y formulación de productos.
     Analiza la siguiente fórmula y proporciona una evaluación y recomendaciones.
 
     **Nombre del Producto:** {formula_data['product_name']}
 
     **Ingredientes:**
-    """
+    '''
     for ing in processed_ingredients:
         prompt += f"- {ing['ingredient_name']}: {ing['original_qty_display']} {ing['original_unit']} ({ing['percentage']:.2f}%)\n"
 
-    prompt += f"""
+    prompt += f'''
     **Resultados del Cálculo:**
     - Peso Total: {totals.get('total_kg', 0):.3f} kg
     - Costo Total: {totals.get('costo_total', 0):.2f}
@@ -500,15 +492,13 @@ def analyze_formula_route(formula_id):
     4.  **Riesgos Potenciales:** ¿Hay algún riesgo a considerar? (ej. problemas de estabilidad, alérgenos comunes, vida útil).
 
     Proporciona una respuesta concisa y fácil de entender en formato Markdown.
-    """
+    '''
 
     try:
         response = model.generate_content(prompt)
-        # Accede al texto a través del atributo 'text'
         analysis_text = response.text
     except Exception as e:
         print(f"ERROR: Error al llamar a la API de Google: {e}")
-        # Considera si quieres devolver un error más específico al cliente
         return jsonify({'analysis': f'Error al contactar el servicio de IA: {e}'}), 500
 
     return jsonify({'analysis': analysis_text})
@@ -524,17 +514,10 @@ if __name__ == '__main__':
 
 @app.before_request
 def check_session():
-    # Solo ejecutar si el usuario está logueado
     if current_user.is_authenticated:
-        # Obtener el token guardado en la sesión del navegador
         browser_session_token = session.get('session_token')
-        
-        # Obtener el token "oficial" guardado en la base de datos
-        # (Necesitarás crear esta función en database.py)
         db_session_token = database.get_session_token_for_user(current_user.id)
 
-        # Si no hay token en el navegador o si no coincide con el de la BD,
-        # significa que se ha iniciado sesión en otro lugar.
         if browser_session_token != db_session_token:
             logout_user()
             flash("Has iniciado sesión en otro dispositivo. Esta sesión ha sido cerrada.")

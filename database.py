@@ -19,7 +19,7 @@ def initialize_database():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # 1. Crear tabla de usuarios
+    # 1. Crear tabla de usuarios (si no existe)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
@@ -28,125 +28,67 @@ def initialize_database():
             full_name TEXT,
             is_verified BOOLEAN DEFAULT FALSE,
             verification_code TEXT,
-            code_expiry TIMESTAMP
+            code_expiry TIMESTAMP,
+            session_token VARCHAR(64)
         );
-    ''') 
-   
-    # Añadir la columna 'full_name' si no existe (para bases de datos antiguas)
+    ''')
+
+    # Añadir columnas de manera idempotente
     try:
         cursor.execute('ALTER TABLE users ADD COLUMN full_name TEXT;')
-        conn.commit()
-        print("Columna 'full_name' añadida a la tabla 'users'.")
     except psycopg2.errors.DuplicateColumn:
         conn.rollback()
-        print("INFO: La columna 'full_name' ya existía.")
-        pass
-
-    # Añadir columnas de verificación si no existen
     try:
         cursor.execute('ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT FALSE;')
-        cursor.execute('ALTER TABLE users ADD COLUMN verification_code TEXT;')
-        cursor.execute('ALTER TABLE users ADD COLUMN code_expiry TIMESTAMP;')
-        conn.commit()
-        print("Columnas de verificación añadidas a la tabla 'users'.")
     except psycopg2.errors.DuplicateColumn:
         conn.rollback()
-        print("INFO: Las columnas de verificación ya existían.")
-        pass
-    except Exception as e:
+    try:
+        cursor.execute('ALTER TABLE users ADD COLUMN verification_code TEXT;')
+    except psycopg2.errors.DuplicateColumn:
         conn.rollback()
-        print(f"ERROR: No se pudieron añadir las columnas de verificación: {e}")
-        pass
-   
-    # 2. Crear tabla de fórmulas
+    try:
+        cursor.execute('ALTER TABLE users ADD COLUMN code_expiry TIMESTAMP;')
+    except psycopg2.errors.DuplicateColumn:
+        conn.rollback()
+    try:
+        cursor.execute('ALTER TABLE users ADD COLUMN session_token VARCHAR(64);')
+    except psycopg2.errors.DuplicateColumn:
+        conn.rollback()
+    
+    conn.commit()
+
+    # 2. Crear tabla de fórmulas (si no existe)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS formulas (
             id SERIAL PRIMARY KEY,
             product_name TEXT NOT NULL,
             description TEXT,
-            creation_date TEXT NOT NULL
+            creation_date TEXT NOT NULL,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
         );
     ''')
-    conn.commit() # Hacemos commit aquí para separar las transacciones
+    conn.commit()
 
-    # --- MODIFICACIONES A LA TABLA formulas (con manejo de errores individual) ---
-
-    # 3. Añadir la columna user_id a formulas si no existe
-    try:
-        cursor.execute('ALTER TABLE formulas ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;')
-        conn.commit() # Commit después de un cambio exitoso
-        print("Columna 'user_id' añadida a la tabla 'formulas'.")
-    except psycopg2.errors.DuplicateColumn:
-        conn.rollback() # Revierte la transacción fallida
-        print("INFO: La columna 'user_id' ya existía.")
-        pass
-
-    # 4. Eliminar la antigua restricción UNIQUE de product_name si existe
-    try:
-        # El nombre de la restricción puede variar, 'formulas_product_name_key' es el default
-        cursor.execute('ALTER TABLE formulas DROP CONSTRAINT formulas_product_name_key;')
-        conn.commit()
-        print("Restricción UNIQUE de 'product_name' eliminada.")
-    except psycopg2.ProgrammingError:
-        conn.rollback()
-        print("INFO: La restricción 'formulas_product_name_key' no existía.")
-        pass
-
-    # 5. Añadir una nueva restricción UNIQUE para (user_id, product_name)
+    # 3. Añadir restricción UNIQUE a formulas (user_id, product_name)
     try:
         cursor.execute('ALTER TABLE formulas ADD CONSTRAINT unique_user_product UNIQUE (user_id, product_name);')
         conn.commit()
-        print("Restricción UNIQUE para '(user_id, product_name)' añadida.")
-    except (psycopg2.errors.DuplicateObject, psycopg2.errors.DuplicateTable): # <-- CAMBIO AQUÍ
+    except (psycopg2.errors.DuplicateObject, psycopg2.errors.DuplicateTable):
         conn.rollback()
-        print("INFO: La restricción 'unique_user_product' ya existía.")
-        pass
 
+    # --- Tablas que deben existir pero no se crean aquí ---
+    # Se asume que 'base_ingredients', 'user_ingredients' y 'formula_ingredients'
+    # ya están creadas y configuradas correctamente en la base de datos de producción.
+    # Lo mismo para la tabla 'bibliografia'.
 
-    # --- Tablas sin cambios (se crean si no existen) ---
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS ingredients (
-            id SERIAL PRIMARY KEY,
-            name TEXT NOT NULL UNIQUE,
-            protein_percent REAL,
-            fat_percent REAL,
-            water_percent REAL,
-            "Ve_Protein_Percent" REAL,
-            notes TEXT,
-            water_retention_factor REAL,
-            min_usage_percent REAL,
-            max_usage_percent REAL,
-            precio_por_kg REAL,
-            categoria TEXT
-        );
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS formula_ingredients (
-            id SERIAL PRIMARY KEY,
-            formula_id INTEGER NOT NULL REFERENCES formulas(id) ON DELETE CASCADE,
-            ingredient_id INTEGER NOT NULL REFERENCES ingredients(id) ON DELETE CASCADE,
-            quantity REAL NOT NULL,
-            unit TEXT NOT NULL
-        );
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS bibliografia (
-            id SERIAL PRIMARY KEY,
-            titulo TEXT NOT NULL,
-            tipo TEXT,
-            contenido TEXT NOT NULL
-        );
-    ''')
-
-    conn.commit() # Commit final para las creaciones de tablas
     cursor.close()
     conn.close()
     print("Base de datos PostgreSQL inicializada y actualizada para multi-usuario.")
 
+
 # --- Imports adicionales para seguridad ---
 from werkzeug.security import generate_password_hash, check_password_hash
 
-# ... (aquí va tu función initialize_database() que ya tienes) ...
 # --- Funciones para Usuarios ---
 def add_user(username: str, password: str, full_name: str, verification_code: str = None, code_expiry: datetime = None) -> bool:
     """
@@ -157,7 +99,6 @@ def add_user(username: str, password: str, full_name: str, verification_code: st
     """
     conn = get_db_connection()
     cursor = conn.cursor()
-    # Generamos un 'hash' de la contraseña. Nunca guardamos la contraseña original.
     password_hash = generate_password_hash(password)
     try:
         cursor.execute(
@@ -166,57 +107,25 @@ def add_user(username: str, password: str, full_name: str, verification_code: st
         )
         conn.commit()
         return True
-    except psycopg2.IntegrityError: # Esto ocurre si el username ya existe (por la restricción UNIQUE)
+    except psycopg2.IntegrityError:
         conn.rollback()
         return False
     finally:
         cursor.close()
         conn.close()
 
-def get_user_by_username(username: str, verification_code: str = None) -> dict | None:
+def get_user_by_username(username: str) -> dict | None:
     """
     Busca un usuario por su nombre de usuario (email).
-    Opcionalmente, puede buscar por código de verificación.
-    Devuelve los datos del usuario (incluyendo el hash de la contraseña) o None si no se encuentra.
+    Devuelve los datos del usuario o None si no se encuentra.
     """
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    if verification_code:
-        cursor.execute("SELECT * FROM users WHERE username = %s AND verification_code = %s", (username, verification_code))
-    else:
-        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+    cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
     user = cursor.fetchone()
     cursor.close()
     conn.close()
-    if user:
-        return dict(user)
-    return None
-
-# Este código va en tu archivo database.py
-
-def verify_user(email):
-    """
-    Actualiza el estado del usuario a 'verificado' en la base de datos,
-    y limpia el código de verificación y su fecha de expiración.
-    """
-    # La consulta SQL para actualizar al usuario
-    sql = "UPDATE users SET is_verified = TRUE, verification_code = NULL, code_expiry = NULL WHERE username = %s"
-    
-    try:
-        # La forma en que te conectas y ejecutas puede variar un poco,
-        # adapta esto a como lo haces en tus otras funciones (add_user, etc.)
-        conn = get_db_connection()  # O como sea tu función para conectar
-        cursor = conn.cursor()
-        cursor.execute(sql, (email,)) # Ejecuta el comando con el email
-        conn.commit() # Guarda los cambios en la base de datos
-        cursor.close()
-        conn.close()
-        return True # Devuelve True si todo salió bien
-    except Exception as e:
-        print(f"Error al verificar el usuario: {e}")
-        # En caso de error, es buena idea deshacer los cambios
-        conn.rollback() 
-        return False # Devuelve False si hubo un error
+    return dict(user) if user else None
 
 def get_user_by_id(user_id: int) -> dict | None:
     """Busca un usuario por su ID."""
@@ -226,15 +135,10 @@ def get_user_by_id(user_id: int) -> dict | None:
     user = cursor.fetchone()
     cursor.close()
     conn.close()
-    if user:
-        return dict(user)
-    return None
+    return dict(user) if user else None
 
 def verify_user(username: str) -> bool:
-    """
-    Marca a un usuario como verificado en la base de datos.
-    Devuelve True si la actualización fue exitosa, False en caso contrario.
-    """
+    """Marca a un usuario como verificado y limpia los datos de verificación."""
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -243,7 +147,7 @@ def verify_user(username: str) -> bool:
             (username,)
         )
         conn.commit()
-        return cursor.rowcount > 0 # Devuelve True si se actualizó una fila
+        return cursor.rowcount > 0
     except Exception as e:
         print(f"ERROR al verificar usuario: {e}")
         conn.rollback()
@@ -276,18 +180,20 @@ def get_formula_by_id(formula_id: int, user_id: int) -> dict | None:
     formula_data = dict(formula_row)
     formula_data['ingredients'] = []
 
-    cursor.execute("""
+    # ¡IMPORTANTE! Esta consulta asume que `formula_ingredients.ingredient_id`
+    # ahora referencia a `user_ingredients.id`.
+    cursor.execute('''
         SELECT
             fi.id AS formula_ingredient_id, fi.formula_id, fi.ingredient_id,
-            fi.quantity, fi.unit, i.name AS ingredient_name, i.protein_percent, 
-            i.fat_percent, i.water_percent, i."Ve_Protein_Percent", i.notes,
-            i.water_retention_factor, i.min_usage_percent, i.max_usage_percent, 
+            fi.quantity, fi.unit, i.name AS ingredient_name, i.protein_percent,
+            i.fat_percent, i.water_percent, i.ve_protein_percent, i.notes,
+            i.water_retention_factor, i.min_usage_percent, i.max_usage_percent,
             i.precio_por_kg, i.categoria
         FROM formula_ingredients fi
-        JOIN ingredients i ON fi.ingredient_id = i.id
-        WHERE fi.formula_id = %s
-    """, (formula_id,))
-    
+        JOIN user_ingredients i ON fi.ingredient_id = i.id
+        WHERE fi.formula_id = %s AND i.user_id = %s
+    ''', (formula_id, user_id))
+
     ingredient_rows = cursor.fetchall()
     formula_data['ingredients'] = [dict(row) for row in ingredient_rows]
     cursor.close()
@@ -299,23 +205,22 @@ def add_formula(product_name: str, user_id: int, description: str = "") -> int |
     cursor = conn.cursor()
     creation_date = datetime.datetime.now().isoformat()
     try:
-        cursor.execute("INSERT INTO formulas (product_name, description, creation_date, user_id) VALUES (%s, %s, %s, %s) RETURNING id", 
+        cursor.execute("INSERT INTO formulas (product_name, description, creation_date, user_id) VALUES (%s, %s, %s, %s) RETURNING id",
                        (product_name, description, creation_date, user_id))
         formula_id = cursor.fetchone()[0]
         conn.commit()
         return formula_id
     except psycopg2.IntegrityError:
+        conn.rollback()
         return None
     finally:
         cursor.close()
         conn.close()
 
 def delete_formula(formula_id: int, user_id: int) -> bool:
-    """Elimina una fórmula y sus ingredientes asociados de la base de datos, verificando el propietario."""
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        # La verificación de user_id asegura que un usuario no pueda borrar fórmulas de otro.
         cursor.execute("DELETE FROM formulas WHERE id = %s AND user_id = %s", (formula_id, user_id))
         conn.commit()
         return cursor.rowcount > 0
@@ -327,56 +232,37 @@ def delete_formula(formula_id: int, user_id: int) -> bool:
         cursor.close()
         conn.close()
 
-def update_formula_name(formula_id: int, new_name: str, user_id: int) -> bool:
-    """Actualiza el nombre de una fórmula específica, verificando el propietario."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        # La restricción UNIQUE(user_id, product_name) se encarga de evitar duplicados por usuario.
-        cursor.execute("UPDATE formulas SET product_name = %s WHERE id = %s AND user_id = %s", (new_name, formula_id, user_id))
-        conn.commit()
-        return cursor.rowcount > 0
-    except psycopg2.IntegrityError: # Falla si el nombre ya existe para ese usuario.
-        conn.rollback()
-        return False
-    except Exception as e:
-        print(f"ERROR actualizando nombre de fórmula: {e}")
-        conn.rollback()
-        return False
-    finally:
-        cursor.close()
-        conn.close()
-
 # --- Funciones para Ingredientes en Fórmulas ---
-def _get_or_create_ingredient(cursor, name: str) -> int | None:
-    """Helper: Busca o crea un ingrediente maestro y devuelve su ID."""
-    cursor.execute("SELECT id FROM ingredients WHERE name ILIKE %s", (name,))
+def _get_or_create_user_ingredient(cursor, name: str, user_id: int) -> int | None:
+    """Helper: Busca o crea un ingrediente de usuario y devuelve su ID."""
+    cursor.execute("SELECT id FROM user_ingredients WHERE name ILIKE %s AND user_id = %s", (name, user_id))
     result = cursor.fetchone()
     if result:
         return result['id']
     else:
-        cursor.execute("INSERT INTO ingredients (name) VALUES (%s) RETURNING id", (name,))
+        # Si no existe, lo crea solo con el nombre y el user_id. El resto de datos son NULL.
+        cursor.execute("INSERT INTO user_ingredients (name, user_id) VALUES (%s, %s) RETURNING id", (name, user_id))
         return cursor.fetchone()['id']
 
-def add_ingredient_to_formula(formula_id: int, ingredient_name: str, quantity: float, unit: str):
+def add_ingredient_to_formula(formula_id: int, ingredient_name: str, quantity: float, unit: str, user_id: int):
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     try:
-        ingredient_master_id = _get_or_create_ingredient(cursor, ingredient_name)
+        ingredient_user_id = _get_or_create_user_ingredient(cursor, ingredient_name, user_id)
         cursor.execute("INSERT INTO formula_ingredients (formula_id, ingredient_id, quantity, unit) VALUES (%s, %s, %s, %s)",
-                       (formula_id, ingredient_master_id, quantity, unit))
+                       (formula_id, ingredient_user_id, quantity, unit))
         conn.commit()
     finally:
         cursor.close()
         conn.close()
 
-def update_ingredient(formula_ingredient_id: int, name: str, quantity: float, unit: str):
+def update_ingredient(formula_ingredient_id: int, name: str, quantity: float, unit: str, user_id: int):
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     try:
-        ingredient_master_id = _get_or_create_ingredient(cursor, name)
+        ingredient_user_id = _get_or_create_user_ingredient(cursor, name, user_id)
         cursor.execute("UPDATE formula_ingredients SET ingredient_id = %s, quantity = %s, unit = %s WHERE id = %s",
-                       (ingredient_master_id, quantity, unit, formula_ingredient_id))
+                       (ingredient_user_id, quantity, unit, formula_ingredient_id))
         conn.commit()
     finally:
         cursor.close()
@@ -399,83 +285,86 @@ def get_formula_id_for_ingredient(formula_ingredient_id: int) -> int | None:
     conn.close()
     return result['formula_id'] if result else None
 
-# --- Funciones de Ingredientes Maestros ---
-def get_all_ingredients_with_details() -> list[dict]:
+# --- Funciones de Ingredientes de Usuario ---
+def get_user_ingredients(user_id: int) -> list[dict]:
+    """Obtiene todos los ingredientes para un usuario específico."""
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    cursor.execute("SELECT * FROM ingredients ORDER BY name")
+    cursor.execute("SELECT * FROM user_ingredients WHERE user_id = %s ORDER BY name", (user_id,))
     results = [dict(row) for row in cursor.fetchall()]
     cursor.close()
     conn.close()
     return results
 
-def add_master_ingredient(details: dict) -> int | None:
+def add_user_ingredient(details: dict, user_id: int) -> int | None:
+    """Añade un nuevo ingrediente a la colección de un usuario."""
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        fields = ['name', 'protein_percent', 'fat_percent', 'water_percent', 'water_retention_factor', 'precio_por_kg', 'categoria']
-        values = [details.get(field) for field in fields]
-        sql = f"INSERT INTO ingredients (name, protein_percent, fat_percent, water_percent, water_retention_factor, precio_por_kg, categoria) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id"
+        fields = ['name', 'protein_percent', 'fat_percent', 'water_percent', 'water_retention_factor', 'precio_por_kg', 'categoria', 'user_id']
+        values = [details.get(field) for field in fields[:-1]]
+        values.append(user_id)
+        
+        sql = f"INSERT INTO user_ingredients (name, protein_percent, fat_percent, water_percent, water_retention_factor, precio_por_kg, categoria, user_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id"
         cursor.execute(sql, values)
         new_id = cursor.fetchone()[0]
         conn.commit()
         return new_id
-    except psycopg2.IntegrityError:
+    except psycopg2.IntegrityError: # Ocurre si el nombre ya existe para ese usuario
+        conn.rollback()
         return None
     finally:
         cursor.close()
         conn.close()
 
-def update_master_ingredient(ingredient_id: int, details: dict) -> bool:
+def update_user_ingredient(ingredient_id: int, details: dict, user_id: int) -> bool:
+    """Actualiza un ingrediente específico de un usuario."""
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         fields_to_update = ['name', 'protein_percent', 'fat_percent', 'water_percent', 'water_retention_factor', 'precio_por_kg', 'categoria']
         set_clause = ", ".join([f"{field} = %s" for field in fields_to_update])
         values = [details.get(field) for field in fields_to_update]
-        values.append(ingredient_id)
-        sql = f"UPDATE ingredients SET {set_clause} WHERE id = %s"
+        values.extend([ingredient_id, user_id])
+        
+        sql = f"UPDATE user_ingredients SET {set_clause} WHERE id = %s AND user_id = %s"
         cursor.execute(sql, values)
         conn.commit()
         return cursor.rowcount > 0
+    except psycopg2.IntegrityError:
+        conn.rollback()
+        return False
     finally:
         cursor.close()
         conn.close()
 
-def delete_master_ingredient(ingredient_id: int) -> str:
+def delete_user_ingredient(ingredient_id: int, user_id: int) -> str:
+    """Elimina un ingrediente de un usuario, si no está en uso."""
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("DELETE FROM ingredients WHERE id = %s", (ingredient_id,))
+        cursor.execute("DELETE FROM user_ingredients WHERE id = %s AND user_id = %s", (ingredient_id, user_id))
         conn.commit()
         return 'success' if cursor.rowcount > 0 else 'not_found'
-    except psycopg2.IntegrityError:
+    except psycopg2.IntegrityError: # Falla si el ingrediente está en uso en formula_ingredients
+        conn.rollback()
         return 'in_use'
     finally:
         cursor.close()
         conn.close()
 
-def search_ingredient_names(query: str) -> list[str]:
+def search_user_ingredient_names(query: str, user_id: int) -> list[str]:
+    """Busca nombres de ingredientes para un usuario específico."""
     conn = get_db_connection()
     cursor = conn.cursor()
     search_term = f"%{query}%"
-    cursor.execute("SELECT name FROM ingredients WHERE name ILIKE %s ORDER BY name LIMIT 10", (search_term,))
+    cursor.execute("SELECT name FROM user_ingredients WHERE name ILIKE %s AND user_id = %s ORDER BY name LIMIT 10", (search_term, user_id))
     results = [row[0] for row in cursor.fetchall()]
     cursor.close()
     conn.close()
     return results
-    
-def get_distinct_ingredient_names() -> list[str]:
-    """Obtiene la lista de todos los nombres de ingredientes maestros."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT name FROM ingredients ORDER BY name")
-    names = [row[0] for row in cursor.fetchall()]
-    cursor.close()
-    conn.close()
-    return names
 
-# --- Funciones de Bibliografía ---
+# --- Funciones de Bibliografía (sin cambios) ---
 def get_all_bibliografia() -> list[dict]:
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -517,54 +406,73 @@ def delete_bibliografia_entry(entry_id: int) -> bool:
     conn.close()
     return success
 
-def search_bibliografia(query: str, limit: int = 3) -> list[dict]:
-    conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    stopwords = {'a', 'con', 'cual', 'de', 'del', 'el', 'en', 'es', 'ideal', 'la', 'las', 'los', 'o', 'para', 'que', 'se', 'segun', 'sin', 'un', 'una', 'y'}
-    keywords = [word for word in query.lower().split() if len(word) > 2 and word not in stopwords]
-    if not keywords: return []
-    where_clauses = " OR ".join(["contenido ILIKE %s"] * len(keywords))
-    sql_query = f"SELECT * FROM bibliografia WHERE {where_clauses} LIMIT %s"
-    values = [f"%{key}%" for key in keywords]
-    values.append(limit)
-    cursor.execute(sql_query, values)
-    results = [dict(row) for row in cursor.fetchall()]
-    cursor.close()
-    conn.close()
-    return results
-
-# Add this function to database.py
+# --- Funciones de Sesión ---
 def update_session_token(user_id, token):
     """Actualiza el token de sesión de un usuario en la base de datos."""
-    sql = "UPDATE users SET session_token = %s WHERE id = %s"
+    conn = get_db_connection()
+    cursor = conn.cursor()
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(sql, (token, user_id))
+        cursor.execute("UPDATE users SET session_token = %s WHERE id = %s", (token, user_id))
         conn.commit()
-        cursor.close()
-        conn.close()
         return True
     except Exception as e:
         print(f"Error updating session token: {e}")
         conn.rollback()
         return False
-    
-# Add this function to database.py
-def get_session_token_for_user(user_id):
-    """Obtiene el token de sesión actual de un usuario desde la base de datos."""
-    sql = "SELECT session_token FROM users WHERE id = %s"
-    token = None
-    try:
-        conn = get_db_connection()
-        # Usamos un cursor que devuelve diccionarios para poder hacer ['session_token']
-        cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cursor.execute(sql, (user_id,))
-        result = cursor.fetchone()
-        if result:
-            token = result['session_token']
+    finally:
         cursor.close()
         conn.close()
+
+def get_session_token_for_user(user_id):
+    """Obtiene el token de sesión actual de un usuario desde la base de datos."""
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        cursor.execute("SELECT session_token FROM users WHERE id = %s", (user_id,))
+        result = cursor.fetchone()
+        token = result['session_token'] if result else None
+        return token
     except Exception as e:
         print(f"Error getting session token: {e}")
-    return token
+        return None
+    finally:
+        cursor.close()
+        conn.close()
+
+def seed_initial_ingredients(user_id):
+    """Copia los ingredientes de la tabla base a la tabla de un nuevo usuario."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+        cursor.execute("SELECT * FROM base_ingredients")
+        base_ingredients = cursor.fetchall()
+
+        user_ingredients_to_insert = [
+            (
+                ing['name'], ing['protein_percent'], ing['fat_percent'], ing['water_percent'],
+                ing['ve_protein_percent'], ing['notes'], ing['water_retention_factor'],
+                ing['min_usage_percent'], ing['max_usage_percent'], ing['precio_por_kg'],
+                ing['categoria'], user_id
+            ) for ing in base_ingredients
+        ]
+
+        if user_ingredients_to_insert:
+            sql = '''
+                INSERT INTO user_ingredients (
+                    name, protein_percent, fat_percent, water_percent, ve_protein_percent,
+                    notes, water_retention_factor, min_usage_percent, max_usage_percent,
+                    precio_por_kg, categoria, user_id
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            '''
+            cursor.executemany(sql, user_ingredients_to_insert)
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error seeding ingredients for user {user_id}: {e}")
+        conn.rollback()
+        return False
+    finally:
+        cursor.close()
+        conn.close()
