@@ -244,10 +244,12 @@ def _get_or_create_user_ingredient(cursor, name: str, user_id: int) -> int | Non
         cursor.execute("INSERT INTO user_ingredients (name, user_id) VALUES (%s, %s) RETURNING id", (name, user_id))
         return cursor.fetchone()['id']
 
-# This is the new, corrected helper function
+# Replace the existing function in database.py with this one
+
 def _get_user_ingredient_id_by_name(cursor, ingredient_name: str, user_id: int):
-    """Finds the ID of an ingredient by its name for a specific user."""
-    sql = "SELECT id FROM user_ingredients WHERE name = %s AND user_id = %s"
+    """Finds the ID of an ingredient by its name for a specific user (case-insensitive)."""
+    # Use ILIKE instead of = for a case-insensitive search
+    sql = "SELECT id FROM user_ingredients WHERE name ILIKE %s AND user_id = %s"
     cursor.execute(sql, (ingredient_name, user_id))
     result = cursor.fetchone()
     if result:
