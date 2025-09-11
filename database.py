@@ -440,7 +440,10 @@ def get_session_token_for_user(user_id):
         conn.close()
 
 def seed_initial_ingredients(user_id):
-    """Copia los ingredientes de la tabla base a la tabla de un nuevo usuario."""
+    """
+    Copies all ingredients from the base_ingredients table to the
+    user_ingredients table for a new user.
+    """
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -448,31 +451,40 @@ def seed_initial_ingredients(user_id):
         cursor.execute("SELECT * FROM base_ingredients")
         base_ingredients = cursor.fetchall()
 
-        user_ingredients_to_insert = [
-            (
-                ing['name'], ing['protein_percent'], ing['fat_percent'], ing['water_percent'],
-                ing['ve_protein_percent'], ing['notes'], ing['water_retention_factor'],
-                ing['min_usage_percent'], ing['max_usage_percent'], ing['precio_por_kg'],
-                ing['categoria'], user_id
-            ) for ing in base_ingredients
-        ]
+        user_ingredients_to_insert = []
+        for ingredient in base_ingredients:
+            user_ingredients_to_insert.append((
+                ingredient['name'],
+                ingredient['protein_percent'],
+                ingredient['fat_percent'],
+                ingredient['water_percent'],
+                ingredient['Ve_Protein_Percent'],  # <-- CORREGIDO CON MAYÚSCULAS
+                ingredient['notes'],
+                ingredient['water_retention_factor'],
+                ingredient['min_usage_percent'],
+                ingredient['max_usage_percent'],
+                ingredient['precio_por_kg'],
+                ingredient['categoria'],
+                user_id
+            ))
 
         if user_ingredients_to_insert:
-            sql = '''
+            sql = """
                 INSERT INTO user_ingredients (
                     name, protein_percent, fat_percent, water_percent, ve_protein_percent,
                     notes, water_retention_factor, min_usage_percent, max_usage_percent,
                     precio_por_kg, categoria, user_id
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            '''
+            """
+            # También corregimos el nombre de la columna en la consulta INSERT
+            sql = sql.replace('ve_protein_percent', 'Ve_Protein_Percent')
             cursor.executemany(sql, user_ingredients_to_insert)
         
         conn.commit()
+        cursor.close()
+        conn.close()
         return True
     except Exception as e:
         print(f"Error seeding ingredients for user {user_id}: {e}")
         conn.rollback()
         return False
-    finally:
-        cursor.close()
-        conn.close()
