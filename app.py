@@ -438,8 +438,12 @@ def verify():
 
         if user['verification_code'] == code:
             database.verify_user(email)
-            # Llenar la tabla de ingredientes del usuario con los datos base
-            database.seed_initial_ingredients(user['id'])
+            
+            # Sembrar ingredientes iniciales para el usuario verificado
+            verified_user = database.get_user_by_username(email)
+            if verified_user:
+                database.seed_initial_ingredients(verified_user['id'])
+
             flash('¡Verificación exitosa! Ahora puedes iniciar sesión.')
             return redirect(url_for('login'))
         else:
