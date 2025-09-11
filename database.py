@@ -244,14 +244,35 @@ def _get_or_create_user_ingredient(cursor, name: str, user_id: int) -> int | Non
         cursor.execute("INSERT INTO user_ingredients (name, user_id) VALUES (%s, %s) RETURNING id", (name, user_id))
         return cursor.fetchone()['id']
 
+# This is the new, corrected helper function
+def _get_user_ingredient_id_by_name(cursor, ingredient_name: str, user_id: int):
+    """Finds the ID of an ingredient by its name for a specific user."""
+    sql = "SELECT id FROM user_ingredients WHERE name = %s AND user_id = %s"
+    cursor.execute(sql, (ingredient_name, user_id))
+    result = cursor.fetchone()
+    if result:
+        return result['id']
+    return None # Ingredient not found for this user
+
+# This is your updated main function that calls the corrected helper
 def add_ingredient_to_formula(formula_id: int, ingredient_name: str, quantity: float, unit: str, user_id: int):
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     try:
-        ingredient_user_id = _get_or_create_user_ingredient(cursor, ingredient_name, user_id)
-        cursor.execute("INSERT INTO formula_ingredients (formula_id, ingredient_id, quantity, unit) VALUES (%s, %s, %s, %s)",
-                       (formula_id, ingredient_user_id, quantity, unit))
-        conn.commit()
+        # Call the new, corrected helper function
+        ingredient_id = _get_user_ingredient_id_by_name(cursor, ingredient_name, user_id)
+        
+        if ingredient_id:
+            # Now we use the correct ingredient_id from the user's personal list
+            cursor.execute(
+                "INSERT INTO formula_ingredients (formula_id, ingredient_id, quantity, unit) VALUES (%s, %s, %s, %s)",
+                (formula_id, ingredient_id, quantity, unit)
+            )
+            conn.commit()
+        else:
+            # This handles the case where the ingredient name doesn't exist for the user
+            print(f"Error: Ingredient '{ingredient_name}' not found for user_id {user_id}")
+            conn.rollback()
     finally:
         cursor.close()
         conn.close()
