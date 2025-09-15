@@ -69,8 +69,9 @@ def register():
         username = request.form.get('username')  # Correo
         password = request.form.get('password')
         confirm_password = request.form.get('confirm_password')
+        terms_accepted = request.form.get('terms')
 
-        if not all([full_name, username, password, confirm_password]):
+        if not all([full_name, username, password, confirm_password, terms_accepted]):
             flash('Todos los campos son requeridos.')
             return redirect(url_for('register'))
         
@@ -506,6 +507,10 @@ def analyze_formula_route(formula_id):
         return jsonify({'analysis': f'Error al contactar el servicio de IA: {e}'}), 500
 
     return jsonify({'analysis': analysis_text})
+
+@app.route('/terms')
+def terms():
+    return render_template('terms.html')
 
 
 # --- 6. INICIALIZACIÓN ---

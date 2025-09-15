@@ -135,6 +135,13 @@
                 </div>
                 <button type="submit">Crear Cuenta</button>
             </form>
+            <div class="form-group">
+                <input type="checkbox" id="terms" name="terms" value="true" required>
+                <label for="terms">
+                    He leído y acepto los 
+                    <a href="{{ url_for('terms') }}" target="_blank">Términos y Condiciones</a>.
+                </label>
+            </div>
             <div class="links">
                 <p>¿Ya tienes una cuenta? <a href="{{ url_for('login') }}">Inicia Sesión</a></p>
             </div>
