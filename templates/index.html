@@ -580,7 +580,15 @@ function loadFormulas() {
         });
 
         // Chatbot Logic
-        // Función de chatbot corregida con debugging
+        // === CÓDIGO COMPLETO DEL CHATBOT ===
+
+        // 1. Event listener para abrir/cerrar el chatbot
+        document.getElementById('chat-bubble').addEventListener('click', () => {
+            const chatWindow = document.getElementById('chat-window');
+            chatWindow.style.display = chatWindow.style.display === 'none' ? 'flex' : 'none';
+        });
+
+        // 2. Event listener para enviar mensajes
         document.getElementById('chat-form').addEventListener('submit', function(event) {
             event.preventDefault();
             const chatInput = document.getElementById('chat-input');
@@ -636,6 +644,7 @@ function loadFormulas() {
             });
         });
 
+        // 3. Función para agregar mensajes al chat
         function appendMessage(text, className) {
             const chatHistory = document.getElementById('chat-history');
             
