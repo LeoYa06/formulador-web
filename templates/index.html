@@ -248,34 +248,36 @@
             item.appendChild(nameSpan);
             item.appendChild(deleteBtn);
 
-            // TEMPORALMENTE: Solo click simple para seleccionar (sin doble click)
-            nameSpan.addEventListener('click', (e) => {
-                console.log('Click en fórmula:', formula.product_name); // Debug log
-                
-                document.querySelectorAll('#lista-formulas li').forEach(li => li.classList.remove('selected'));
-                item.classList.add('selected');
-                currentFormulaId = formula.id;
-                analysisContainer.style.display = 'none';
-                
-                console.log('Llamando a API para fórmula ID:', formula.id); // Debug log
-                
-                fetch('/api/formula/' + formula.id)
-                    .then(res => res.json())
-                    .then(data => {
-                        console.log('Respuesta recibida:', data); // Debug log
-                        updateDetailsView(data);
-                    })
-                    .catch(error => {
-                        console.error('Error en fetch:', error);
-                    });
-            });
+            // Variables para manejar el timing de clicks
+            let clickTimeout;
+            let clickCount = 0;
 
-            // TEMPORALMENTE: Ctrl+Click para editar nombre
+            // Manejar clicks en el nombre
             nameSpan.addEventListener('click', (e) => {
-                if (e.ctrlKey) {
-                    e.preventDefault();
-                    console.log('Ctrl+Click para editar:', formula.product_name); // Debug log
-                    startEditingFormula(nameSpan, formula.id);
+                clickCount++;
+                
+                if (clickCount === 1) {
+                    // Esperamos un poco para ver si hay un segundo click (doble click)
+                    clickTimeout = setTimeout(() => {
+                        if (!isEditingFormula) {
+                            // Es un click simple, seleccionar la fórmula
+                            document.querySelectorAll('#lista-formulas li').forEach(li => li.classList.remove('selected'));
+                            item.classList.add('selected');
+                            currentFormulaId = formula.id;
+                            analysisContainer.style.display = 'none';
+                            fetch('/api/formula/' + formula.id)
+                                .then(res => res.json())
+                                .then(data => updateDetailsView(data));
+                        }
+                        clickCount = 0;
+                    }, 300); // Esperamos 300ms para detectar doble click
+                } else if (clickCount === 2) {
+                    // Es doble click, cancelar el timeout y empezar edición
+                    clearTimeout(clickTimeout);
+                    clickCount = 0;
+                    if (!isEditingFormula) {
+                        startEditingFormula(nameSpan, formula.id);
+                    }
                 }
             });
 
@@ -420,8 +422,6 @@
         }
 
         function updateDetailsView(data) {
-            console.log('updateDetailsView llamada con:', data);
-            
             const details = data.details;
             if (!details) {
                 console.error("No se recibieron detalles válidos para la fórmula.");
@@ -429,108 +429,55 @@
                 return;
             }
             
-            console.log('Details encontrados:', details);
-            
-            // Verificar que los elementos existen
-            const formulaNameDisplay = document.getElementById('formula-name-display');
+            document.getElementById('formula-name-display').textContent = details.product_name;
             const ingredientsTableBody = document.querySelector("#ingredients-table tbody");
-            const resultsDisplay = document.getElementById('results-display');
+            ingredientsTableBody.innerHTML = '';
             
-            console.log('Elementos encontrados:');
-            console.log('- formula-name-display:', formulaNameDisplay);
-            console.log('- ingredients-table tbody:', ingredientsTableBody);
-            console.log('- results-display:', resultsDisplay);
-            console.log('- detailsPanel:', detailsPanel);
+            (details.ingredients || []).forEach(ing => {
+                const row = ingredientsTableBody.insertRow();
+                row.innerHTML = `<td>${ing.ingredient_name}</td><td>${ing.original_qty_display} ${ing.original_unit}</td><td>${ing.kg_total.toFixed(3)}</td><td>${(ing.costo_linea || 0).toFixed(2)}</td><td class="actions-cell"></td>`;
+                
+                const editBtn = document.createElement('button');
+                editBtn.textContent = 'Editar';
+                editBtn.className = 'btn-edit';
+                editBtn.onclick = () => populateFormForEdit(ing);
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = 'Eliminar';
+                deleteBtn.className = 'btn-delete';
+                deleteBtn.onclick = () => {
+                    if (confirm(`¿Eliminar "${ing.ingredient_name}" de la fórmula?`)) {
+                        fetch(`/api/ingredient/${ing.formula_ingredient_id}/delete`, { method: 'POST' })
+                            .then(res => res.json()).then(newData => updateDetailsView(newData));
+                    }
+                };
+                
+                row.cells[4].appendChild(editBtn);
+                row.cells[4].appendChild(deleteBtn);
+            });
             
-            if (!formulaNameDisplay) {
-                console.error('No se encuentra el elemento formula-name-display');
-                return;
-            }
+            const totals = details.totals || {};
+            document.getElementById('results-display').innerHTML = `
+                <p><strong>Peso Total:</strong> ${(totals.total_kg || 0).toFixed(3)} kg</p>
+                <p><strong>Costo Total:</strong> ${(totals.costo_total || 0).toFixed(2)}</p>
+                <p><strong>Costo por Kg:</strong> ${(totals.costo_por_kg || 0).toFixed(2)}</p>
+                <hr style="border-color: var(--border-color);">
+                <p><strong>% Proteína:</strong> ${(totals.protein_perc || 0).toFixed(2)}%</p>
+                <p><strong>% Grasa:</strong> ${(totals.fat_perc || 0).toFixed(2)}%</p>
+                <p><strong>% Humedad Total:</strong> ${(totals.water_perc || 0).toFixed(2)}%</p>
+                <hr style="border-color: var(--border-color);">
+                <p><strong>Ratio Agua/Proteína:</strong> ${totals.aw_fp_ratio_str || 'N/A'}</p>
+                <p><strong>Ratio Grasa/Proteína:</strong> ${totals.af_fp_ratio_str || 'N/A'}</p>
+            `;
             
-            if (!ingredientsTableBody) {
-                console.error('No se encuentra el elemento ingredients-table tbody');
-                return;
-            }
-            
-            if (!resultsDisplay) {
-                console.error('No se encuentra el elemento results-display');
-                return;
-            }
-            
-            if (!detailsPanel) {
-                console.error('No se encuentra el elemento detailsPanel');
-                return;
-            }
-            
-            try {
-                // Actualizar el nombre
-                console.log('Actualizando nombre a:', details.product_name);
-                formulaNameDisplay.textContent = details.product_name;
-                
-                // Limpiar tabla de ingredientes
-                console.log('Limpiando tabla de ingredientes');
-                ingredientsTableBody.innerHTML = '';
-                
-                // Agregar ingredientes
-                const ingredients = details.ingredients || [];
-                console.log('Procesando', ingredients.length, 'ingredientes');
-                
-                ingredients.forEach((ing, index) => {
-                    console.log(`Procesando ingrediente ${index + 1}:`, ing.ingredient_name);
-                    const row = ingredientsTableBody.insertRow();
-                    row.innerHTML = `<td>${ing.ingredient_name}</td><td>${ing.original_qty_display} ${ing.original_unit}</td><td>${ing.kg_total.toFixed(3)}</td><td>${(ing.costo_linea || 0).toFixed(2)}</td><td class="actions-cell"></td>`;
-                    
-                    const editBtn = document.createElement('button');
-                    editBtn.textContent = 'Editar';
-                    editBtn.className = 'btn-edit';
-                    editBtn.onclick = () => populateFormForEdit(ing);
-                    
-                    const deleteBtn = document.createElement('button');
-                    deleteBtn.textContent = 'Eliminar';
-                    deleteBtn.className = 'btn-delete';
-                    deleteBtn.onclick = () => {
-                        if (confirm(`¿Eliminar "${ing.ingredient_name}" de la fórmula?`)) {
-                            fetch(`/api/ingredient/${ing.formula_ingredient_id}/delete`, { method: 'POST' })
-                                .then(res => res.json()).then(newData => updateDetailsView(newData));
-                        }
-                    };
-                    
-                    row.cells[4].appendChild(editBtn);
-                    row.cells[4].appendChild(deleteBtn);
-                });
-                
-                // Actualizar totales
-                const totals = details.totals || {};
-                console.log('Actualizando totales:', totals);
-                
-                resultsDisplay.innerHTML = `
-                    <p><strong>Peso Total:</strong> ${(totals.total_kg || 0).toFixed(3)} kg</p>
-                    <p><strong>Costo Total:</strong> ${(totals.costo_total || 0).toFixed(2)}</p>
-                    <p><strong>Costo por Kg:</strong> ${(totals.costo_por_kg || 0).toFixed(2)}</p>
-                    <hr style="border-color: var(--border-color);">
-                    <p><strong>% Proteína:</strong> ${(totals.protein_perc || 0).toFixed(2)}%</p>
-                    <p><strong>% Grasa:</strong> ${(totals.fat_perc || 0).toFixed(2)}%</p>
-                    <p><strong>% Humedad Total:</strong> ${(totals.water_perc || 0).toFixed(2)}%</p>
-                    <hr style="border-color: var(--border-color);">
-                    <p><strong>Ratio Agua/Proteína:</strong> ${totals.aw_fp_ratio_str || 'N/A'}</p>
-                    <p><strong>Ratio Grasa/Proteína:</strong> ${totals.af_fp_ratio_str || 'N/A'}</p>
-                `;
-                
-                // CRUCIAL: Mostrar el panel
-                console.log('Mostrando panel de detalles');
-                detailsPanel.style.display = 'block';
-                console.log('Panel mostrado. Display style:', detailsPanel.style.display);
-                
-            } catch (error) {
-                console.error('Error en updateDetailsView:', error);
-            }
+            detailsPanel.style.display = 'block';
         }
 
-        function loadFormulas() {
-            fetch('/api/formulas').then(res => res.json()).then(data => {
-                formulaList.innerHTML = '';
-                data.forEach(formula => addFormulaToList(formula));
-            });
+function loadFormulas() {
+    fetch('/api/formulas').then(res => res.json()).then(data => {
+        formulaList.innerHTML = '';
+        data.forEach(formula => addFormulaToList(formula));
+    });
         }
 
         function analyzeFormula() {
