@@ -230,6 +230,7 @@
         let isEditingFormula = false; // Flag para evitar conflictos de edición
 
         // Función corregida para agregar fórmulas a la lista
+        // Versión simplificada de addFormulaToList para depurar
         function addFormulaToList(formula) {
             const item = document.createElement('li');
             item.className = 'formula-item';
@@ -247,36 +248,34 @@
             item.appendChild(nameSpan);
             item.appendChild(deleteBtn);
 
-            // Variables para manejar el timing de clicks
-            let clickTimeout;
-            let clickCount = 0;
-
-            // Manejar clicks en el nombre
+            // TEMPORALMENTE: Solo click simple para seleccionar (sin doble click)
             nameSpan.addEventListener('click', (e) => {
-                clickCount++;
+                console.log('Click en fórmula:', formula.product_name); // Debug log
                 
-                if (clickCount === 1) {
-                    // Esperamos un poco para ver si hay un segundo click (doble click)
-                    clickTimeout = setTimeout(() => {
-                        if (!isEditingFormula) {
-                            // Es un click simple, seleccionar la fórmula
-                            document.querySelectorAll('#lista-formulas li').forEach(li => li.classList.remove('selected'));
-                            item.classList.add('selected');
-                            currentFormulaId = formula.id;
-                            analysisContainer.style.display = 'none';
-                            fetch('/api/formula/' + formula.id)
-                                .then(res => res.json())
-                                .then(data => updateDetailsView(data));
-                        }
-                        clickCount = 0;
-                    }, 300); // Esperamos 300ms para detectar doble click
-                } else if (clickCount === 2) {
-                    // Es doble click, cancelar el timeout y empezar edición
-                    clearTimeout(clickTimeout);
-                    clickCount = 0;
-                    if (!isEditingFormula) {
-                        startEditingFormula(nameSpan, formula.id);
-                    }
+                document.querySelectorAll('#lista-formulas li').forEach(li => li.classList.remove('selected'));
+                item.classList.add('selected');
+                currentFormulaId = formula.id;
+                analysisContainer.style.display = 'none';
+                
+                console.log('Llamando a API para fórmula ID:', formula.id); // Debug log
+                
+                fetch('/api/formula/' + formula.id)
+                    .then(res => res.json())
+                    .then(data => {
+                        console.log('Respuesta recibida:', data); // Debug log
+                        updateDetailsView(data);
+                    })
+                    .catch(error => {
+                        console.error('Error en fetch:', error);
+                    });
+            });
+
+            // TEMPORALMENTE: Ctrl+Click para editar nombre
+            nameSpan.addEventListener('click', (e) => {
+                if (e.ctrlKey) {
+                    e.preventDefault();
+                    console.log('Ctrl+Click para editar:', formula.product_name); // Debug log
+                    startEditingFormula(nameSpan, formula.id);
                 }
             });
 
