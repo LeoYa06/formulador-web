@@ -580,33 +580,83 @@ function loadFormulas() {
         });
 
         // Chatbot Logic
-        document.getElementById('chat-bubble').addEventListener('click', () => {
-            const chatWindow = document.getElementById('chat-window');
-            chatWindow.style.display = chatWindow.style.display === 'none' ? 'flex' : 'none';
-        });
-
+        // Función de chatbot corregida con debugging
         document.getElementById('chat-form').addEventListener('submit', function(event) {
             event.preventDefault();
             const chatInput = document.getElementById('chat-input');
             const userQuestion = chatInput.value.trim();
+            
+            console.log('Pregunta del usuario:', userQuestion); // Debug
+            
             if (!userQuestion) return;
             
+            // Mostrar mensaje del usuario
             appendMessage(userQuestion, 'user-message');
             chatInput.value = '';
-
-            fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: userQuestion }) })
-                .then(res => res.json())
+            
+            // Mostrar mensaje de "escribiendo..."
+            const typingMessage = appendMessage('Escribiendo...', 'bot-message');
+            
+            console.log('Enviando petición al servidor...'); // Debug
+            
+            fetch('/api/chat', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ question: userQuestion }) 
+            })
+            .then(res => {
+                console.log('Respuesta recibida, status:', res.status); // Debug
+                return res.json();
+            })
+            .then(data => {
+                console.log('Datos recibidos:', data); // Debug
+                
+                // Eliminar mensaje de "escribiendo..."
+                if (typingMessage && typingMessage.parentNode) {
+                    typingMessage.parentNode.removeChild(typingMessage);
+                }
+                
+                // Mostrar respuesta de la IA
+                if (data.answer) {
+                    appendMessage(data.answer, 'bot-message');
+                } else {
+                    console.error('No se recibió respuesta en data.answer:', data);
+                    appendMessage('Error: No se recibió respuesta del servidor.', 'bot-message');
+                }
+            })
+            .catch(error => {
+                console.error('Error en la petición:', error);
+                
+                // Eliminar mensaje de "escribiendo..."
+                if (typingMessage && typingMessage.parentNode) {
+                    typingMessage.parentNode.removeChild(typingMessage);
+                }
+                
+                appendMessage('Error de conexión. Inténtalo de nuevo.', 'bot-message');
+            });
         });
 
         function appendMessage(text, className) {
             const chatHistory = document.getElementById('chat-history');
+            
+            if (!chatHistory) {
+                console.error('No se encuentra el elemento chat-history');
+                return null;
+            }
+            
             const messageDiv = document.createElement('div');
             messageDiv.className = `chat-message ${className}`;
-            // Simple markdown for bold and newlines
+            
+            // Procesar markdown básico
             let formattedText = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
             messageDiv.innerHTML = formattedText;
+            
             chatHistory.appendChild(messageDiv);
             chatHistory.scrollTop = chatHistory.scrollHeight;
+            
+            console.log('Mensaje agregado:', text.substring(0, 50) + '...'); // Debug
+            
+            return messageDiv;
         }
 
         // Inicializar al cargar la página
