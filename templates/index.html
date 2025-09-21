@@ -121,6 +121,17 @@
         .formula-name { cursor: pointer; flex-grow: 1; }
         .formula-delete-btn { background-color: var(--danger-color); color: white; border-radius: 4px; padding: 2px 6px; font-size: 0.8em; visibility: hidden; }
         .formula-item:hover .formula-delete-btn { visibility: visible; }
+
+        .formula-name-edit {
+        background-color: #333 !important;
+        color: var(--text-color) !important;
+        border: 2px solid var(--primary-color) !important;
+        padding: 4px 8px !important;
+        border-radius: 4px !important;
+        font-size: inherit !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+}
     </style>
 </head>
 <body>
@@ -208,36 +219,51 @@
     </div>
 
     <script>
-        // --- COMIENZO DEL CÓDIGO JAVASCRIPT ORIGINAL ---
+            // --- CÓDIGO JAVASCRIPT CORREGIDO ---
         const formulaList = document.getElementById('lista-formulas');
         const detailsPanel = document.getElementById('details-panel');
         const analysisContainer = document.getElementById('analysis-container');
         const analysisResult = document.getElementById('analysis-result');
         const ingredientForm = document.getElementById('ingredient-form');
-        // ... (resto de las variables globales) ...
         let currentFormulaId = null;
         let currentlyEditingIngredientId = null;
+        let isEditingFormula = false; // Flag para evitar conflictos de edición
 
         function addFormulaToList(formula) {
             const item = document.createElement('li');
             item.className = 'formula-item';
             item.dataset.id = formula.id;
+
             const nameSpan = document.createElement('span');
             nameSpan.className = 'formula-name';
             nameSpan.textContent = formula.product_name;
+
             const deleteBtn = document.createElement('button');
             deleteBtn.className = 'formula-delete-btn';
             deleteBtn.textContent = 'X';
             deleteBtn.title = 'Eliminar fórmula';
+
             item.appendChild(nameSpan);
             item.appendChild(deleteBtn);
-            nameSpan.addEventListener('click', () => {
+
+            // Click simple para seleccionar (solo si no estamos editando)
+            nameSpan.addEventListener('click', (e) => {
+                if (isEditingFormula) return; // Prevenir selección durante edición
+                
                 document.querySelectorAll('#lista-formulas li').forEach(li => li.classList.remove('selected'));
                 item.classList.add('selected');
                 currentFormulaId = formula.id;
                 analysisContainer.style.display = 'none';
                 fetch('/api/formula/' + formula.id).then(res => res.json()).then(data => updateDetailsView(data));
             });
+
+            // Doble click para editar nombre
+            nameSpan.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                if (isEditingFormula) return; // Prevenir múltiples ediciones simultáneas
+                startEditingFormula(nameSpan, formula.id);
+            });
+
             deleteBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (confirm(`¿Estás seguro de que quieres eliminar la fórmula "${formula.product_name}"?`)) {
@@ -258,15 +284,107 @@
             });
             formulaList.appendChild(item);
         }
-        
+
+        function startEditingFormula(nameSpan, formulaId) {
+            if (isEditingFormula) return;
+            isEditingFormula = true;
+            
+            const currentName = nameSpan.textContent;
+            const input = document.createElement('input');
+            
+            input.type = 'text';
+            input.value = currentName;
+            input.className = 'formula-name-edit';
+            input.style.cssText = `
+                background-color: #333 !important;
+                color: var(--text-color) !important;
+                border: 2px solid var(--primary-color) !important;
+                padding: 4px 8px !important;
+                border-radius: 4px !important;
+                font-size: inherit !important;
+                width: 100% !important;
+                box-sizing: border-box !important;
+                margin: 0 !important;
+            `;
+            
+            // Reemplazar el span con el input
+            nameSpan.style.display = 'none';
+            nameSpan.parentNode.insertBefore(input, nameSpan);
+            
+            input.focus();
+            input.select();
+            
+            // Función para guardar los cambios
+            const saveChanges = () => {
+                const newName = input.value.trim();
+                
+                if (newName && newName !== currentName) {
+                    // Enviar actualización al servidor
+                    fetch(`/api/formulas/${formulaId}/update`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ product_name: newName })
+                    })
+                    .then(res => res.json())
+                    .then(result => {
+                        if (result.success) {
+                            nameSpan.textContent = newName;
+                            // Actualizar también el título en el panel de detalles si está abierto
+                            if (currentFormulaId === formulaId) {
+                                document.getElementById('formula-name-display').textContent = newName;
+                            }
+                        } else {
+                            alert('Error al actualizar: ' + result.error);
+                            nameSpan.textContent = currentName; // Revertir cambios
+                        }
+                        finishEditing();
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error de conexión');
+                        nameSpan.textContent = currentName; // Revertir cambios
+                        finishEditing();
+                    });
+                } else {
+                    finishEditing();
+                }
+            };
+            
+            // Función para terminar la edición
+            const finishEditing = () => {
+                if (input.parentNode) {
+                    input.parentNode.removeChild(input);
+                }
+                nameSpan.style.display = '';
+                isEditingFormula = false;
+            };
+            
+            // Event listeners para guardar o cancelar
+            input.addEventListener('blur', saveChanges);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveChanges();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    finishEditing();
+                }
+            });
+        }
+
         function populateFormForEdit(ingredient) {
             currentlyEditingIngredientId = ingredient.formula_ingredient_id;
             document.getElementById('ingredient-form-title').textContent = `Editando: ${ingredient.ingredient_name}`;
             document.getElementById('ing-name').value = ingredient.ingredient_name;
             document.getElementById('ing-qty').value = parseFloat(ingredient.original_qty_display);
             document.getElementById('ing-unit').value = ingredient.original_unit.toLowerCase();
-            document.getElementById('ingredient-submit-btn').textContent = 'Actualizar';
-            document.getElementById('ingredient-submit-btn').className = 'btn-success';
+            
+            // CORRECCIÓN: Buscar el botón submit de forma más robusta
+            const submitBtn = document.querySelector('#ingredient-form button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.textContent = 'Actualizar';
+                submitBtn.className = 'btn-success';
+            }
             document.getElementById('cancel-edit-btn').style.display = 'inline-block';
         }
 
@@ -275,8 +393,13 @@
             document.getElementById('ingredient-form-title').textContent = 'Añadir Ingrediente';
             ingredientForm.reset();
             document.getElementById('autocomplete-list').innerHTML = '';
-            document.getElementById('ingredient-submit-btn').textContent = 'Añadir';
-            document.getElementById('ingredient-submit-btn').className = 'btn-primary';
+            
+            // CORRECCIÓN: Buscar el botón submit de forma más robusta
+            const submitBtn = document.querySelector('#ingredient-form button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.textContent = 'Añadir';
+                submitBtn.className = 'btn-primary';
+            }
             document.getElementById('cancel-edit-btn').style.display = 'none';
         }
 
@@ -295,6 +418,7 @@
             (details.ingredients || []).forEach(ing => {
                 const row = ingredientsTableBody.insertRow();
                 row.innerHTML = `<td>${ing.ingredient_name}</td><td>${ing.original_qty_display} ${ing.original_unit}</td><td>${ing.kg_total.toFixed(3)}</td><td>${(ing.costo_linea || 0).toFixed(2)}</td><td class="actions-cell"></td>`;
+                
                 const editBtn = document.createElement('button');
                 editBtn.textContent = 'Editar';
                 editBtn.className = 'btn-edit';
@@ -309,8 +433,11 @@
                             .then(res => res.json()).then(newData => updateDetailsView(newData));
                     }
                 };
-                row.cells[4].appendChild(editBtn);
-                row.cells[4].appendChild(deleteBtn);
+                
+                if(actionsCell) {
+                    actionsCell.appendChild(editBtn);
+                    actionsCell.appendChild(deleteBtn);
+                }
             });
             
             const totals = details.totals || {};
@@ -329,7 +456,7 @@
             
             detailsPanel.style.display = 'block';
         }
-        
+
         function loadFormulas() {
             fetch('/api/formulas').then(res => res.json()).then(data => {
                 formulaList.innerHTML = '';
@@ -349,6 +476,7 @@
                 });
         }
 
+        // Event Listeners
         document.getElementById('add-formula-form').addEventListener('submit', function(event) {
             event.preventDefault();
             const input = document.getElementById('product-name-input');
@@ -362,36 +490,67 @@
                     if (result.success) {
                         addFormulaToList(result.formula);
                         input.value = '';
-                    } else { alert('Error: ' + result.error); }
+                    } else { 
+                        alert('Error: ' + result.error); 
+                    }
                 });
             }
         });
 
         document.getElementById('ingredient-form').addEventListener('submit', function(event) {
             event.preventDefault();
-            const ingredientData = { name: document.getElementById('ing-name').value.trim(), quantity: document.getElementById('ing-qty').value, unit: document.getElementById('ing-unit').value };
-            let url = currentlyEditingIngredientId ? `/api/ingredient/${currentlyEditingIngredientId}/update` : `/api/formula/${currentFormulaId}/ingredients/add`;
-            fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ingredientData) })
-                .then(res => res.json()).then(result => { if(result.success) { updateDetailsView(result); resetIngredientForm(); } else { alert('Error: '+ result.error)}});
+            const ingredientData = { 
+                name: document.getElementById('ing-name').value.trim(), 
+                quantity: document.getElementById('ing-qty').value, 
+                unit: document.getElementById('ing-unit').value 
+            };
+            
+            let url = currentlyEditingIngredientId ? 
+                `/api/ingredient/${currentlyEditingIngredientId}/update` : 
+                `/api/formula/${currentFormulaId}/ingredients/add`;
+                
+            fetch(url, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(ingredientData) 
+            })
+            .then(res => res.json())
+            .then(result => { 
+                if(result.success) { 
+                    updateDetailsView(result); 
+                    resetIngredientForm(); 
+                } else { 
+                    alert('Error: '+ result.error);
+                }
+            });
         });
 
         document.getElementById('cancel-edit-btn').addEventListener('click', resetIngredientForm);
-        
+
         document.getElementById('ing-name').addEventListener('input', function() {
             const query = this.value;
             const autocompleteList = document.getElementById('autocomplete-list');
-            if (!query || query.length < 2) { autocompleteList.innerHTML = ''; return; }
-            fetch(`/api/ingredients/search?q=${query}`).then(response => response.json()).then(data => {
-                autocompleteList.innerHTML = '';
-                data.forEach(name => {
-                    const suggestionDiv = document.createElement('div');
-                    suggestionDiv.textContent = name;
-                    suggestionDiv.addEventListener('click', function() { document.getElementById('ing-name').value = this.textContent; autocompleteList.innerHTML = ''; });
-                    autocompleteList.appendChild(suggestionDiv);
+            if (!query || query.length < 2) { 
+                autocompleteList.innerHTML = ''; 
+                return; 
+            }
+            
+            fetch(`/api/ingredients/search?q=${query}`)
+                .then(response => response.json())
+                .then(data => {
+                    autocompleteList.innerHTML = '';
+                    data.forEach(name => {
+                        const suggestionDiv = document.createElement('div');
+                        suggestionDiv.textContent = name;
+                        suggestionDiv.addEventListener('click', function() { 
+                            document.getElementById('ing-name').value = this.textContent; 
+                            autocompleteList.innerHTML = ''; 
+                        });
+                        autocompleteList.appendChild(suggestionDiv);
+                    });
                 });
-            });
         });
-        
+
         document.addEventListener('click', function(e) {
             if (!document.querySelector('.autocomplete').contains(e.target)) {
                 document.getElementById('autocomplete-list').innerHTML = '';
@@ -399,11 +558,11 @@
         });
 
         document.getElementById('details-panel').addEventListener('click', function(event) {
-             if (event.target && event.target.id === 'analyze-formula-btn') {
+            if (event.target && event.target.id === 'analyze-formula-btn') {
                 analyzeFormula();
             }
         });
-        
+
         // Chatbot Logic
         document.getElementById('chat-bubble').addEventListener('click', () => {
             const chatWindow = document.getElementById('chat-window');
@@ -415,10 +574,12 @@
             const chatInput = document.getElementById('chat-input');
             const userQuestion = chatInput.value.trim();
             if (!userQuestion) return;
+            
             appendMessage(userQuestion, 'user-message');
             chatInput.value = '';
+
             fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: userQuestion }) })
-                .then(res => res.json()).then(data => appendMessage(data.answer, 'bot-message'));
+                .then(res => res.json())
         });
 
         function appendMessage(text, className) {
@@ -432,8 +593,8 @@
             chatHistory.scrollTop = chatHistory.scrollHeight;
         }
 
+        // Inicializar al cargar la página
         window.onload = loadFormulas;
-        // --- FIN DEL CÓDIGO JAVASCRIPT ---
     </script>
 </body>
 </html>

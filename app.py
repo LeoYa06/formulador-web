@@ -19,7 +19,6 @@ import calculations
 # --- 1. CONFIGURACIÓN INICIAL ---
 load_dotenv()
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'una-clave-secreta-muy-dificil-de-adivinar')
 
 # Configurar la API de Google AI
@@ -227,6 +226,32 @@ def delete_formula_route(formula_id):
         return jsonify({'success': True})
     else:
         return jsonify({'success': False, 'error': 'No se pudo eliminar la fórmula'}), 403
+    
+@app.route("/api/formulas/<int:formula_id>/update", methods=['POST'])
+@login_required
+def update_formula_name(formula_id):
+    """Actualiza el nombre de una fórmula."""
+    data = request.json
+    new_name = data.get('product_name', '').strip()
+    
+    if not new_name:
+        return jsonify({'success': False, 'error': 'El nombre del producto es requerido'}), 400
+    
+    formula_data = database.get_formula_by_id(formula_id, current_user.id)
+    if not formula_data:
+        return jsonify({'success': False, 'error': 'Fórmula no encontrada o sin permiso'}), 404
+    
+    existing_formulas = database.get_all_formulas(current_user.id)
+    for formula in existing_formulas:
+        if formula['id'] != formula_id and formula['product_name'].lower() == new_name.lower():
+            return jsonify({'success': False, 'error': 'Ya tienes una fórmula con ese nombre'}), 409
+    
+    success = database.update_formula_name(formula_id, new_name, current_user.id)
+    
+    if success:
+        return jsonify({'success': True, 'formula': {'id': formula_id, 'product_name': new_name}})
+    else:
+        return jsonify({'success': False, 'error': 'No se pudo actualizar la fórmula'}), 500
 
 @app.route("/api/formula/<int:formula_id>/ingredients/add", methods=['POST'])
 @login_required
@@ -511,7 +536,6 @@ def analyze_formula_route(formula_id):
 @app.route('/terms')
 def terms():
     return render_template('terms.html')
-
 
 # --- 6. INICIALIZACIÓN ---
 

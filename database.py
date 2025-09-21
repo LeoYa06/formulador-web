@@ -232,6 +232,40 @@ def delete_formula(formula_id: int, user_id: int) -> bool:
         cursor.close()
         conn.close()
 
+def update_formula_name(formula_id: int, new_name: str, user_id: int) -> bool:
+    """
+    Actualiza el nombre de una fórmula específica.
+    
+    Args:
+        formula_id (int): ID de la fórmula a actualizar
+        new_name (str): Nuevo nombre para la fórmula
+        user_id (int): ID del usuario propietario
+    
+    Returns:
+        bool: True si la actualización fue exitosa, False en caso contrario
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Actualizar el nombre de la fórmula solo si pertenece al usuario
+        cursor.execute('''
+            UPDATE formulas 
+            SET product_name = %s
+            WHERE id = %s AND user_id = %s
+        ''', (new_name, formula_id, user_id))
+        
+        conn.commit()
+        success = cursor.rowcount > 0  # True si se actualizó al menos una fila
+        return success
+        
+    except Exception as e:
+        print(f"Error actualizando nombre de fórmula: {e}")
+        conn.rollback()
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
 # --- Funciones para Ingredientes en Fórmulas ---
 def _get_or_create_user_ingredient(cursor, name: str, user_id: int) -> int | None:
     """Helper: Busca o crea un ingrediente de usuario y devuelve su ID."""
