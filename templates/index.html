@@ -420,6 +420,8 @@
         }
 
         function updateDetailsView(data) {
+            console.log('updateDetailsView llamada con:', data);
+            
             const details = data.details;
             if (!details) {
                 console.error("No se recibieron detalles válidos para la fórmula.");
@@ -427,50 +429,101 @@
                 return;
             }
             
-            document.getElementById('formula-name-display').textContent = details.product_name;
+            console.log('Details encontrados:', details);
+            
+            // Verificar que los elementos existen
+            const formulaNameDisplay = document.getElementById('formula-name-display');
             const ingredientsTableBody = document.querySelector("#ingredients-table tbody");
-            ingredientsTableBody.innerHTML = '';
+            const resultsDisplay = document.getElementById('results-display');
             
-            (details.ingredients || []).forEach(ing => {
-                const row = ingredientsTableBody.insertRow();
-                row.innerHTML = `<td>${ing.ingredient_name}</td><td>${ing.original_qty_display} ${ing.original_unit}</td><td>${ing.kg_total.toFixed(3)}</td><td>${(ing.costo_linea || 0).toFixed(2)}</td><td class="actions-cell"></td>`;
-                
-                const editBtn = document.createElement('button');
-                editBtn.textContent = 'Editar';
-                editBtn.className = 'btn-edit';
-                editBtn.onclick = () => populateFormForEdit(ing);
-                
-                const deleteBtn = document.createElement('button');
-                deleteBtn.textContent = 'Eliminar';
-                deleteBtn.className = 'btn-delete';
-                deleteBtn.onclick = () => {
-                    if (confirm(`¿Eliminar "${ing.ingredient_name}" de la fórmula?`)) {
-                        fetch(`/api/ingredient/${ing.formula_ingredient_id}/delete`, { method: 'POST' })
-                            .then(res => res.json()).then(newData => updateDetailsView(newData));
-                    }
-                };
-                
-                if(actionsCell) {
-                    actionsCell.appendChild(editBtn);
-                    actionsCell.appendChild(deleteBtn);
-                }
-            });
+            console.log('Elementos encontrados:');
+            console.log('- formula-name-display:', formulaNameDisplay);
+            console.log('- ingredients-table tbody:', ingredientsTableBody);
+            console.log('- results-display:', resultsDisplay);
+            console.log('- detailsPanel:', detailsPanel);
             
-            const totals = details.totals || {};
-            document.getElementById('results-display').innerHTML = `
-                <p><strong>Peso Total:</strong> ${(totals.total_kg || 0).toFixed(3)} kg</p>
-                <p><strong>Costo Total:</strong> ${(totals.costo_total || 0).toFixed(2)}</p>
-                <p><strong>Costo por Kg:</strong> ${(totals.costo_por_kg || 0).toFixed(2)}</p>
-                <hr style="border-color: var(--border-color);">
-                <p><strong>% Proteína:</strong> ${(totals.protein_perc || 0).toFixed(2)}%</p>
-                <p><strong>% Grasa:</strong> ${(totals.fat_perc || 0).toFixed(2)}%</p>
-                <p><strong>% Humedad Total:</strong> ${(totals.water_perc || 0).toFixed(2)}%</p>
-                <hr style="border-color: var(--border-color);">
-                <p><strong>Ratio Agua/Proteína:</strong> ${totals.aw_fp_ratio_str || 'N/A'}</p>
-                <p><strong>Ratio Grasa/Proteína:</strong> ${totals.af_fp_ratio_str || 'N/A'}</p>
-            `;
+            if (!formulaNameDisplay) {
+                console.error('No se encuentra el elemento formula-name-display');
+                return;
+            }
             
-            detailsPanel.style.display = 'block';
+            if (!ingredientsTableBody) {
+                console.error('No se encuentra el elemento ingredients-table tbody');
+                return;
+            }
+            
+            if (!resultsDisplay) {
+                console.error('No se encuentra el elemento results-display');
+                return;
+            }
+            
+            if (!detailsPanel) {
+                console.error('No se encuentra el elemento detailsPanel');
+                return;
+            }
+            
+            try {
+                // Actualizar el nombre
+                console.log('Actualizando nombre a:', details.product_name);
+                formulaNameDisplay.textContent = details.product_name;
+                
+                // Limpiar tabla de ingredientes
+                console.log('Limpiando tabla de ingredientes');
+                ingredientsTableBody.innerHTML = '';
+                
+                // Agregar ingredientes
+                const ingredients = details.ingredients || [];
+                console.log('Procesando', ingredients.length, 'ingredientes');
+                
+                ingredients.forEach((ing, index) => {
+                    console.log(`Procesando ingrediente ${index + 1}:`, ing.ingredient_name);
+                    const row = ingredientsTableBody.insertRow();
+                    row.innerHTML = `<td>${ing.ingredient_name}</td><td>${ing.original_qty_display} ${ing.original_unit}</td><td>${ing.kg_total.toFixed(3)}</td><td>${(ing.costo_linea || 0).toFixed(2)}</td><td class="actions-cell"></td>`;
+                    
+                    const editBtn = document.createElement('button');
+                    editBtn.textContent = 'Editar';
+                    editBtn.className = 'btn-edit';
+                    editBtn.onclick = () => populateFormForEdit(ing);
+                    
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.textContent = 'Eliminar';
+                    deleteBtn.className = 'btn-delete';
+                    deleteBtn.onclick = () => {
+                        if (confirm(`¿Eliminar "${ing.ingredient_name}" de la fórmula?`)) {
+                            fetch(`/api/ingredient/${ing.formula_ingredient_id}/delete`, { method: 'POST' })
+                                .then(res => res.json()).then(newData => updateDetailsView(newData));
+                        }
+                    };
+                    
+                    row.cells[4].appendChild(editBtn);
+                    row.cells[4].appendChild(deleteBtn);
+                });
+                
+                // Actualizar totales
+                const totals = details.totals || {};
+                console.log('Actualizando totales:', totals);
+                
+                resultsDisplay.innerHTML = `
+                    <p><strong>Peso Total:</strong> ${(totals.total_kg || 0).toFixed(3)} kg</p>
+                    <p><strong>Costo Total:</strong> ${(totals.costo_total || 0).toFixed(2)}</p>
+                    <p><strong>Costo por Kg:</strong> ${(totals.costo_por_kg || 0).toFixed(2)}</p>
+                    <hr style="border-color: var(--border-color);">
+                    <p><strong>% Proteína:</strong> ${(totals.protein_perc || 0).toFixed(2)}%</p>
+                    <p><strong>% Grasa:</strong> ${(totals.fat_perc || 0).toFixed(2)}%</p>
+                    <p><strong>% Humedad Total:</strong> ${(totals.water_perc || 0).toFixed(2)}%</p>
+                    <hr style="border-color: var(--border-color);">
+                    <p><strong>Ratio Agua/Proteína:</strong> ${totals.aw_fp_ratio_str || 'N/A'}</p>
+                    <p><strong>Ratio Grasa/Proteína:</strong> ${totals.af_fp_ratio_str || 'N/A'}</p>
+                `;
+                
+                // CRUCIAL: Mostrar el panel
+                console.log('Mostrando panel de detalles');
+                detailsPanel.style.display = 'block';
+                console.log('Panel mostrado. Display style:', detailsPanel.style.display);
+                
+            } catch (error) {
+                console.error('Error en updateDetailsView:', error);
+            }
         }
 
         function loadFormulas() {
