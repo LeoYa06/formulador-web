@@ -7,6 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 # --- Configuración para PostgreSQL ---
 DATABASE_URL = os.getenv("DATABASE_URL")
+print(f"DEBUG: La URL de la base de datos en el entorno es: {DATABASE_URL}")
 
 def get_db_connection():
     """Establece conexión con la base de datos PostgreSQL."""
