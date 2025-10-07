@@ -537,10 +537,13 @@ def analyze_formula_route(formula_id):
 def terms():
     return render_template('terms.html')
 
-# --- 6. INICIALIZACIÓN ---
+# --- 6. INICIALIZACIÓN Y COMANDOS CLI ---
 
-with app.app_context():
+@app.cli.command("init-db")
+def init_db_command():
+    """Crea las tablas de la base de datos."""
     database.initialize_database()
+    print("Base de datos inicializada.")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
