@@ -24,7 +24,7 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'una-clave-secreta-muy-difici
 # Configurar la API de Google AI
 try:
     genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-    model = genai.GenerativeModel('gemini-pro')
+    model = genai.GenerativeModel('gemini-pro-latest')
     print("INFO: API de Google AI configurada correctamente.")
 except Exception as e:
     print(f"ERROR: No se pudo configurar la API de Google AI. Verifica tu clave de API. Error: {e}")
