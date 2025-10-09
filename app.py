@@ -8,7 +8,6 @@ patch_psycopg()
 import os
 import random
 import secrets
-import requests # <--- AÑADIDO PARA PRUEBA
 from datetime import datetime, timedelta
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
@@ -31,20 +30,11 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'una-clave-secreta-muy-difici
 # Configurar la API de OpenAI
 try:
     # La API de OpenAI buscará la variable de entorno OPENAI_API_KEY automáticamente
-    client = OpenAI()
+    client = OpenAI(timeout=30.0)
     print("INFO: Cliente de OpenAI configurado correctamente.")
 except Exception as e:
     print(f"ERROR: No se pudo configurar el cliente de OpenAI. Verifica tu clave de API. Error: {e}")
     client = None
-
-# --- RUTA DE PRUEBA TEMPORAL ---
-@app.route("/test-connection")
-def test_connection():
-    try:
-        response = requests.get("https://api.openai.com/v1", timeout=10)
-        return f"Prueba de conexión exitosa. Código de estado: {response.status_code}"
-    except requests.exceptions.RequestException as e:
-        return f"Prueba de conexión fallida. Error: {e}"
 
 # --- 2. CONFIGURACIÓN DE FLASK-LOGIN ---
 login_manager = LoginManager()
