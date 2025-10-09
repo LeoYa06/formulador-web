@@ -8,6 +8,8 @@ patch_psycopg()
 import os
 import random
 import secrets
+import httpx
+import certifi
 from datetime import datetime, timedelta
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
@@ -29,9 +31,10 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'una-clave-secreta-muy-difici
 
 # Configurar la API de OpenAI
 try:
-    # La API de OpenAI buscará la variable de entorno OPENAI_API_KEY automáticamente
-    client = OpenAI(timeout=30.0)
-    print("INFO: Cliente de OpenAI configurado correctamente.")
+    # Configuración robusta del cliente HTTP para compatibilidad
+    http_client = httpx.Client(verify=certifi.where())
+    client = OpenAI(timeout=30.0, http_client=http_client)
+    print("INFO: Cliente de OpenAI configurado correctamente con HTTPX y Certifi.")
 except Exception as e:
     print(f"ERROR: No se pudo configurar el cliente de OpenAI. Verifica tu clave de API. Error: {e}")
     client = None
