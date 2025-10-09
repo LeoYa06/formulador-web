@@ -24,6 +24,7 @@ import calculations
 
 # --- 1. CONFIGURACIÓN INICIAL ---
 load_dotenv()
+print(f"DEBUG: Clave de API de OpenAI leída: {os.getenv('OPENAI_API_KEY')}")
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'una-clave-secreta-muy-dificil-de-adivinar')
 
