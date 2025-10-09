@@ -31,12 +31,29 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'una-clave-secreta-muy-difici
 
 # Configurar la API de OpenAI
 try:
-    # Configuración robusta del cliente HTTP para compatibilidad
-    http_client = httpx.Client(verify=certifi.where())
-    client = OpenAI(timeout=30.0, http_client=http_client)
-    print("INFO: Cliente de OpenAI configurado correctamente con HTTPX y Certifi.")
+    # 1. Verificar que la clave de API de OpenAI esté presente
+    api_key = os.getenv('OPENAI_API_KEY')
+    if not api_key:
+        raise ValueError("La variable de entorno OPENAI_API_KEY no está configurada.")
+
+    # 2. Configurar el cliente HTTP, forzando HTTP/1.1 para Render
+    http_client = httpx.Client(verify=certifi.where(), http2=False)
+    
+    # 3. Inicializar el cliente de OpenAI con reintentos automáticos
+    client = OpenAI(
+        api_key=api_key,
+        timeout=30.0,
+        http_client=http_client,
+        max_retries=2,
+    )
+    
+    # 4. Realizar una llamada de prueba para validar la clave y la conexión
+    print("INFO: Validando la clave de API de OpenAI con una llamada de prueba...")
+    client.models.list()
+    print("INFO: Cliente de OpenAI configurado y validado correctamente.")
+
 except Exception as e:
-    print(f"ERROR: No se pudo configurar el cliente de OpenAI. Verifica tu clave de API. Error: {e}")
+    print(f"ERROR: No se pudo configurar o validar el cliente de OpenAI. Verifica tu clave de API y la conexión. Error: {e}")
     client = None
 
 # --- 2. CONFIGURACIÓN DE FLASK-LOGIN ---
