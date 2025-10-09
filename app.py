@@ -1,3 +1,9 @@
+from gevent import monkey
+monkey.patch_all()
+
+from psycogreen.gevent import patch_psycopg
+patch_psycopg()
+
 # app.py
 import os
 import random
@@ -9,7 +15,7 @@ from flask import session
 from flask import Flask, render_template, jsonify, request, flash, redirect, url_for
 from werkzeug.security import check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
-import google.generativeai as genai
+from openai import OpenAI
 from dotenv import load_dotenv
 
 # Importamos nuestras funciones de base de datos y cálculos
@@ -21,14 +27,14 @@ load_dotenv()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'una-clave-secreta-muy-dificil-de-adivinar')
 
-# Configurar la API de Google AI
+# Configurar la API de OpenAI
 try:
-    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-    model = genai.GenerativeModel('gemini-pro-latest')
-    print("INFO: API de Google AI configurada correctamente.")
+    # La API de OpenAI buscará la variable de entorno OPENAI_API_KEY automáticamente
+    client = OpenAI()
+    print("INFO: Cliente de OpenAI configurado correctamente.")
 except Exception as e:
-    print(f"ERROR: No se pudo configurar la API de Google AI. Verifica tu clave de API. Error: {e}")
-    model = None
+    print(f"ERROR: No se pudo configurar el cliente de OpenAI. Verifica tu clave de API. Error: {e}")
+    client = None
 
 # --- 2. CONFIGURACIÓN DE FLASK-LOGIN ---
 login_manager = LoginManager()
@@ -393,12 +399,12 @@ def chat_with_ai():
     """
     Maneja las conversaciones del chatbot con la IA generativa, usando la bibliografía como contexto.
     """
-    if not model:
+    if not client:
         return jsonify({'answer': 'Error: La API de IA no está configurada.'}), 500
 
     data = request.json
     user_question = data.get('question')
-
+    
     if not user_question:
         return jsonify({'answer': 'No se recibió ninguna pregunta.'}), 400
 
@@ -410,31 +416,35 @@ def chat_with_ai():
         for entry in bibliografia_entries
     ])
 
-    prompt = f'''
-    Eres un asistente experto en tecnología de alimentos y formulación de productos. Tu tarea es responder a las preguntas del usuario de la forma más completa y actualizada posible.
+    system_prompt = f"""
+Eres un asistente experto en tecnología de alimentos y formulación de productos. Tu tarea es responder a las preguntas del usuario de la forma más completa y actualizada posible.
 
-    Para ello, debes combinar información de tres fuentes:
-    1.  **La Bibliografía Interna:** Este es tu principal punto de partida. Úsala para obtener información de base y contexto específico de la empresa.
-    2.  **Tu Conocimiento General como IA:** Complementa la información de la bibliografía con tu conocimiento profundo sobre el tema.
-    3.  **Simulación de Búsqueda Web:** Imagina que has realizado una búsqueda en tiempo real en Google sobre el tema. Incorpora en tu respuesta las últimas tendencias, investigaciones o noticias que encontrarías.
+Para ello, debes combinar información de tres fuentes:
+1.  **La Bibliografía Interna:** Este es tu principal punto de partida. Úsala para obtener información de base y contexto específico de la empresa.
+2.  **Tu Conocimiento General como IA:** Complementa la información de la bibliografía con tu conocimiento profundo sobre el tema.
+3.  **Simulación de Búsqueda Web:** Imagina que has realizado una búsqueda en tiempo real en Google sobre el tema. Incorpora en tu respuesta las últimas tendencias, investigaciones o noticias que encontrarías.
 
-    **Proceso de Respuesta:**
-    - Comienza con la información de la bibliografía si es relevante.
-    - Enriquece la respuesta con tu conocimiento general.
-    - Finaliza añadiendo los hallazgos más recientes que una búsqueda web proporcionaría, indicando que son "tendencias recientes" o "información actualizada".
+**Proceso de Respuesta:**
+- Comienza con la información de la bibliografía si es relevante.
+- Enriquece la respuesta con tu conocimiento general.
+- Finaliza añadiendo los hallazgos más recientes que una búsqueda web proporcionaría, indicando que son "tendencias recientes" o "información actualizada".
 
-    --- INICIO DE LA BIBLIOGRAFÍA ---
-    {contexto_bibliografico}
-    --- FIN DE LA BIBLIOGRAFÍA ---
-
-    **Pregunta del usuario:** "{user_question}"
-    '''
+--- INICIO DE LA BIBLIOGRAFÍA ---
+{contexto_bibliografico}
+--- FIN DE LA BIBLIOGRAFÍA ---
+"""
 
     try:
-        response = model.generate_content(prompt)
-        ai_answer = response.text
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_question}
+            ]
+        )
+        ai_answer = response.choices[0].message.content
     except Exception as e:
-        print(f"ERROR: Error al llamar a la API de Google en el chat: {e}")
+        print(f"ERROR: Error al llamar a la API de OpenAI en el chat: {e}")
         return jsonify({'answer': f'Error al contactar el servicio de IA: {e}'}), 500
 
     return jsonify({'answer': ai_answer})
@@ -483,7 +493,7 @@ def analyze_formula_route(formula_id):
     """
     Analiza una fórmula utilizando la IA generativa.
     """
-    if not model:
+    if not client:
         return jsonify({'analysis': 'Error: La API de IA no está configurada.'}), 500
 
     formula_data = database.get_formula_by_id(formula_id, current_user.id)
@@ -493,42 +503,42 @@ def analyze_formula_route(formula_id):
     processed_ingredients = calculations.process_ingredients_for_display(formula_data.get('ingredients', []))
     totals = calculations.calculate_formula_totals(processed_ingredients)
 
-    prompt = f'''
-    Eres un experto en tecnología de alimentos y formulación de productos.
-    Analiza la siguiente fórmula y proporciona una evaluación y recomendaciones.
+    system_prompt = "Eres un experto en tecnología de alimentos y formulación de productos. Analiza la siguiente fórmula y proporciona una evaluación y recomendaciones concisas y fáciles de entender en formato Markdown."
 
-    **Nombre del Producto:** {formula_data['product_name']}
-
-    **Ingredientes:**
-    '''
+    user_prompt = f"**Nombre del Producto:** {formula_data['product_name']}\n\n"
+    user_prompt += "**Ingredientes:**\n"
     for ing in processed_ingredients:
-        prompt += f"- {ing['ingredient_name']}: {ing['original_qty_display']} {ing['original_unit']} ({ing['percentage']:.2f}%)\n"
+        user_prompt += f"- {ing['ingredient_name']}: {ing['original_qty_display']} {ing['original_unit']} ({ing['percentage']:.2f}%)\n"
 
-    prompt += f'''
-    **Resultados del Cálculo:**
-    - Peso Total: {totals.get('total_kg', 0):.3f} kg
-    - Costo Total: {totals.get('costo_total', 0):.2f}
-    - Costo por Kg: {totals.get('costo_por_kg', 0):.2f}
-    - % Proteína: {totals.get('protein_perc', 0):.2f}%
-    - % Grasa: {totals.get('fat_perc', 0):.2f}%
-    - % Humedad Total: {totals.get('water_perc', 0):.2f}%
-    - Ratio Agua/Proteína: {totals.get('aw_fp_ratio_str', 'N/A')}
-    - Ratio Grasa/Proteína: {totals.get('af_fp_ratio_str', 'N/A')}
+    user_prompt += f'''
+**Resultados del Cálculo:**
+- Peso Total: {totals.get('total_kg', 0):.3f} kg
+- Costo Total: {totals.get('costo_total', 0):.2f}
+- Costo por Kg: {totals.get('costo_por_kg', 0):.2f}
+- % Proteína: {totals.get('protein_perc', 0):.2f}%
+- % Grasa: {totals.get('fat_perc', 0):.2f}%
+- % Humedad Total: {totals.get('water_perc', 0):.2f}%
+- Ratio Agua/Proteína: {totals.get('aw_fp_ratio_str', 'N/A')}
+- Ratio Grasa/Proteína: {totals.get('af_fp_ratio_str', 'N/A')}
 
-    **Análisis Solicitado:**
-    1.  **Evaluación General:** ¿Qué tipo de producto es? ¿La fórmula parece balanceada para su propósito?
-    2.  **Puntos Fuertes:** ¿Cuáles son los aspectos positivos de esta formulación? (ej. buen perfil nutricional, bajo costo, etc.)
-    3.  **Posibles Mejoras:** ¿Qué cambios sugerirías? (ej. ajustar un ingrediente para mejorar la textura, reducir costos, mejorar el perfil nutricional).
-    4.  **Riesgos Potenciales:** ¿Hay algún riesgo a considerar? (ej. problemas de estabilidad, alérgenos comunes, vida útil).
-
-    Proporciona una respuesta concisa y fácil de entender en formato Markdown.
-    '''
+**Análisis Solicitado:**
+1.  **Evaluación General:** ¿Qué tipo de producto es? ¿La fórmula parece balanceada para su propósito?
+2.  **Puntos Fuertes:** ¿Cuáles son los aspectos positivos de esta formulación? (ej. buen perfil nutricional, bajo costo, etc.)
+3.  **Posibles Mejoras:** ¿Qué cambios sugerirías? (ej. ajustar un ingrediente para mejorar la textura, reducir costos, mejorar el perfil nutricional).
+4.  **Riesgos Potenciales:** ¿Hay algún riesgo a considerar? (ej. problemas de estabilidad, alérgenos comunes, vida útil).
+'''
 
     try:
-        response = model.generate_content(prompt)
-        analysis_text = response.text
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+        )
+        analysis_text = response.choices[0].message.content
     except Exception as e:
-        print(f"ERROR: Error al llamar a la API de Google: {e}")
+        print(f"ERROR: Error al llamar a la API de OpenAI: {e}")
         return jsonify({'analysis': f'Error al contactar el servicio de IA: {e}'}), 500
 
     return jsonify({'analysis': analysis_text})
