@@ -24,7 +24,6 @@ import calculations
 
 # --- 1. CONFIGURACIÓN INICIAL ---
 load_dotenv()
-print(f"DEBUG: Clave de API de OpenAI leída: {os.getenv('OPENAI_API_KEY')}")
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'una-clave-secreta-muy-dificil-de-adivinar')
 
@@ -539,6 +538,8 @@ def analyze_formula_route(formula_id):
         )
         analysis_text = response.choices[0].message.content
     except Exception as e:
+        print(f"ERROR TYPE: {type(e)}")
+        print(f"ERROR ARGS: {e.args}")
         print(f"ERROR: Error al llamar a la API de OpenAI: {e}")
         return jsonify({'analysis': f'Error al contactar el servicio de IA: {e}'}), 500
 
