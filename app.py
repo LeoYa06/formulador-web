@@ -580,16 +580,51 @@ def terms():
 @app.route("/test-openai", methods=['GET'])
 @login_required
 def test_openai():
+    # --- Enhanced Diagnostic Tests ---
+    diagnostics = {}
     try:
-        print("INFO: Probando conexión a OpenAI con una solicitud simple...")
-        response = client.models.list()
-        print("INFO: Conexión a OpenAI exitosa")
-        return jsonify({"success": True, "models": [model.id for model in response.data]})
+        print("INFO: [DIAGNOSTIC] Attempting direct connection to google.com...")
+        response_google = httpx.get("https://www.google.com", timeout=10)
+        diagnostics["google_connection"] = {
+            "success": True,
+            "status_code": response_google.status_code
+        }
+        print(f"INFO: [DIAGNOSTIC] google.com status code: {response_google.status_code}")
     except Exception as e:
-        print(f"ERROR TYPE: {type(e)}")
-        print(f"ERROR ARGS: {e.args}")
-        print(f"ERROR: Error al probar la API de OpenAI: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
+        print(f"ERROR: [DIAGNOSTIC] Direct connection test to google.com failed: {e}")
+        diagnostics["google_connection"] = {"success": False, "error": str(e)}
+
+    try:
+        print("INFO: [DIAGNOSTIC] Attempting direct connection to api.openai.com...")
+        # We don't pass auth headers, so a 401 is a success for connectivity.
+        response_openai = httpx.get("https://api.openai.com/v1/models", timeout=10)
+        diagnostics["openai_connection"] = {
+            "success": True,
+            "status_code": response_openai.status_code
+        }
+        print(f"INFO: [DIAGNOSTIC] api.openai.com status code: {response_openai.status_code}")
+    except Exception as e:
+        print(f"ERROR: [DIAGNOSTIC] Direct connection test to api.openai.com failed: {e}")
+        diagnostics["openai_connection"] = {"success": False, "error": str(e)}
+
+    # --- Original OpenAI Library Test ---
+    library_test = {}
+    try:
+        print("INFO: Probando conexión a OpenAI con la biblioteca oficial...")
+        response = client.models.list()
+        library_test = {
+            "success": True,
+            "models_count": len(response.data)
+        }
+        print("INFO: Conexión a OpenAI (biblioteca) exitosa")
+    except Exception as e:
+        print(f"ERROR: Error al probar la API de OpenAI (biblioteca): {e}")
+        library_test = {"success": False, "error": str(e)}
+
+    return jsonify({
+        "diagnostics": diagnostics,
+        "library_test": library_test
+    })
 
 # --- 6. INICIALIZACIÓN Y COMANDOS CLI ---
 
