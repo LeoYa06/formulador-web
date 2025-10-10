@@ -33,9 +33,9 @@ else:
 
 # Configurar el cliente de OpenAI
 try:
-    http_client = httpx.Client(http2=False, verify=certifi.where())
-    client = OpenAI(timeout=60.0, http_client=http_client)
-    print("INFO: Cliente de OpenAI configurado correctamente con HTTP/1.1 y timeout de 60 segundos")
+    # Simplificando la inicialización para dejar que la biblioteca OpenAI maneje la configuración de httpx
+    client = OpenAI(timeout=60.0)
+    print("INFO: Cliente de OpenAI configurado con la configuración por defecto de la biblioteca.")
 except Exception as e:
     print(f"ERROR: No se pudo configurar el cliente de OpenAI. Error: {e}")
     client = None
