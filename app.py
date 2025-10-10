@@ -1,9 +1,3 @@
-from gevent import monkey
-monkey.patch_all()
-
-from psycogreen.gevent import patch_psycopg
-patch_psycopg()
-
 # app.py
 import os
 import random
