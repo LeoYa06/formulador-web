@@ -8,6 +8,7 @@ patch_psycopg()
 import os
 import random
 import secrets
+import time
 import httpx
 import certifi
 from datetime import datetime, timedelta
@@ -17,7 +18,7 @@ from flask import session
 from flask import Flask, render_template, jsonify, request, flash, redirect, url_for
 from werkzeug.security import check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
-from openai import OpenAI
+from openai import OpenAI, APIConnectionError
 from dotenv import load_dotenv
 
 # Importamos nuestras funciones de base de datos y cálculos
@@ -499,11 +500,19 @@ def verify():
 @app.route("/api/formula/<int:formula_id>/analyze", methods=['POST'])
 @login_required
 def analyze_formula_route(formula_id):
-    """
-    Analiza una fórmula utilizando la IA generativa.
-    """
     if not client:
         return jsonify({'analysis': 'Error: La API de IA no está configurada.'}), 500
+
+    # Validar la conexión a OpenAI
+    try:
+        print(f"INFO: Validando la clave de API de OpenAI con una llamada de prueba para formula_id: {formula_id}")
+        client.models.list()
+        print("INFO: Conexión inicial a OpenAI exitosa")
+    except Exception as e:
+        print(f"ERROR TYPE: {type(e)}")
+        print(f"ERROR ARGS: {e.args}")
+        print(f"ERROR: No se pudo validar la clave de API de OpenAI: {e}")
+        return jsonify({'analysis': f'Error al validar la clave de API: {e}'}), 500
 
     formula_data = database.get_formula_by_id(formula_id, current_user.id)
     if not formula_data:
@@ -520,15 +529,15 @@ def analyze_formula_route(formula_id):
         user_prompt += f"- {ing['ingredient_name']}: {ing['original_qty_display']} {ing['original_unit']} ({ing['percentage']:.2f}%)\n"
 
     user_prompt += f'''
-**Resultados del Cálculo:**
-- Peso Total: {totals.get('total_kg', 0):.3f} kg
-- Costo Total: {totals.get('costo_total', 0):.2f}
-- Costo por Kg: {totals.get('costo_por_kg', 0):.2f}
-- % Proteína: {totals.get('protein_perc', 0):.2f}%
-- % Grasa: {totals.get('fat_perc', 0):.2f}%
-- % Humedad Total: {totals.get('water_perc', 0):.2f}%
-- Ratio Agua/Proteína: {totals.get('aw_fp_ratio_str', 'N/A')}
-- Ratio Grasa/Proteína: {totals.get('af_fp_ratio_str', 'N/A')}
+    **Resultados del Cálculo:**
+    - Peso Total: {totals.get('total_kg', 0):.3f} kg
+    - Costo Total: {totals.get('costo_total', 0):.2f}
+    - Costo por Kg: {totals.get('costo_por_kg', 0):.2f}
+    - % Proteína: {totals.get('protein_perc', 0):.2f}%
+    - % Grasa: {totals.get('fat_perc', 0):.2f}%
+    - % Humedad Total: {totals.get('water_perc', 0):.2f}%
+    - Ratio Agua/Proteína: {totals.get('aw_fp_ratio_str', 'N/A')}
+    - Ratio Grasa/Proteína: {totals.get('af_fp_ratio_str', 'N/A')}
 
 **Análisis Solicitado:**
 1.  **Evaluación General:** ¿Qué tipo de producto es? ¿La fórmula parece balanceada para su propósito?
@@ -537,26 +546,50 @@ def analyze_formula_route(formula_id):
 4.  **Riesgos Potenciales:** ¿Hay algún riesgo a considerar? (ej. problemas de estabilidad, alérgenos comunes, vida útil).
 '''
 
-    try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ]
-        )
-        analysis_text = response.choices[0].message.content
-    except Exception as e:
-        print(f"ERROR TYPE: {type(e)}")
-        print(f"ERROR ARGS: {e.args}")
-        print(f"ERROR: Error al llamar a la API de OpenAI: {e}")
-        return jsonify({'analysis': f'Error al contactar el servicio de IA: {e}'}), 500
+    print(f"INFO: Tamaño del user_prompt: {len(user_prompt)} caracteres")
 
-    return jsonify({'analysis': analysis_text})
+    retries = 3
+    for attempt in range(retries):
+        try:
+            print(f"INFO: Intento {attempt + 1}/{retries} de solicitud a OpenAI para formula_id: {formula_id}")
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
+            print(f"INFO: Solicitud a OpenAI exitosa para formula_id: {formula_id}")
+            analysis_text = response.choices[0].message.content
+            return jsonify({'analysis': analysis_text})
+        except APIConnectionError as e:
+            print(f"ERROR: Intento {attempt + 1}/{retries} fallido: {e}")
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)  # Exponential backoff
+                continue
+            else:
+                print(f"ERROR TYPE: {type(e)}")
+                print(f"ERROR ARGS: {e.args}")
+                print(f"ERROR: Error al llamar a la API de OpenAI: {e}")
+                return jsonify({'analysis': f'Error al contactar el servicio de IA: {e}'}), 500
 
 @app.route('/terms')
 def terms():
     return render_template('terms.html')
+
+@app.route("/test-openai", methods=['GET'])
+@login_required
+def test_openai():
+    try:
+        print("INFO: Probando conexión a OpenAI con una solicitud simple...")
+        response = client.models.list()
+        print("INFO: Conexión a OpenAI exitosa")
+        return jsonify({"success": True, "models": [model.id for model in response.data]})
+    except Exception as e:
+        print(f"ERROR TYPE: {type(e)}")
+        print(f"ERROR ARGS: {e.args}")
+        print(f"ERROR: Error al probar la API de OpenAI: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 # --- 6. INICIALIZACIÓN Y COMANDOS CLI ---
 
