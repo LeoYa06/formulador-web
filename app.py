@@ -24,21 +24,27 @@ load_dotenv()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'una-clave-secreta-muy-dificil-de-adivinar')
 
-# Verificar la clave de API
-api_key = os.getenv('OPENAI_API_KEY')
-if not api_key:
+# Verificar y sanear la clave de API
+api_key_raw = os.getenv('OPENAI_API_KEY')
+client = None # Inicializar cliente como None
+
+if not api_key_raw:
     print("ERROR: No se encontró OPENAI_API_KEY en las variables de entorno")
 else:
-    print(f"INFO: Clave de API de OpenAI: {api_key[:4]}... (truncada por seguridad)")
-
-# Configurar el cliente de OpenAI
-try:
-    # Simplificando la inicialización para dejar que la biblioteca OpenAI maneje la configuración de httpx
-    client = OpenAI(timeout=60.0)
-    print("INFO: Cliente de OpenAI configurado con la configuración por defecto de la biblioteca.")
-except Exception as e:
-    print(f"ERROR: No se pudo configurar el cliente de OpenAI. Error: {e}")
-    client = None
+    # Eliminar espacios en blanco y saltos de línea
+    api_key = api_key_raw.strip()
+    if not api_key:
+        print("ERROR: La variable OPENAI_API_KEY está vacía después de sanearla.")
+    else:
+        print(f"INFO: Clave de API de OpenAI: {api_key[:4]}... (truncada por seguridad)")
+        # Configurar el cliente de OpenAI
+        try:
+            # Pasando explícitamente la clave saneada
+            client = OpenAI(api_key=api_key, timeout=60.0)
+            print("INFO: Cliente de OpenAI configurado con la clave de API saneada.")
+        except Exception as e:
+            print(f"ERROR: No se pudo configurar el cliente de OpenAI. Error: {e}")
+            client = None
 
 # --- 2. CONFIGURACIÓN DE FLASK-LOGIN ---
 login_manager = LoginManager()
