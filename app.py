@@ -240,6 +240,50 @@ def cuenta_page():
 
 # --- 5. RUTAS DE API ---
 
+@app.route('/api/formulas', methods=['GET'])
+@login_required
+def get_formulas():
+    formulas = database.get_all_formulas(current_user.id)
+    return jsonify(formulas)
+
+@app.route('/api/formulas/add', methods=['POST'])
+@login_required
+def add_formula_route():
+    data = request.get_json()
+    product_name = data.get('product_name')
+    description = data.get('description', '')
+    if not product_name:
+        return jsonify({'success': False, 'error': 'El nombre del producto es requerido.'}), 400
+    
+    formula_id = database.add_formula(product_name, current_user.id, description)
+    
+    if formula_id:
+        return jsonify({'success': True, 'formula_id': formula_id})
+    else:
+        return jsonify({'success': False, 'error': 'Ya existe una fórmula con este nombre.'}), 409
+
+@app.route('/api/formulas/<int:formula_id>/delete', methods=['POST'])
+@login_required
+def delete_formula_route(formula_id):
+    success = database.delete_formula(formula_id, current_user.id)
+    return jsonify({'success': success})
+
+@app.route('/api/formulas/<int:formula_id>/update', methods=['POST'])
+@login_required
+def update_formula_route(formula_id):
+    data = request.get_json()
+    new_name = data.get('product_name')
+    if not new_name:
+        return jsonify({'success': False, 'error': 'El nombre del producto es requerido.'}), 400
+    
+    success = database.update_formula_name(formula_id, new_name, current_user.id)
+    
+    if success:
+        return jsonify({'success': True})
+    else:
+        return jsonify({'success': False, 'error': 'No se pudo actualizar la fórmula.'}), 500
+
+
 @app.route("/api/chat", methods=['POST'])
 @login_required
 def chat_with_ai():
