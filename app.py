@@ -254,7 +254,11 @@ def chat_with_ai():
     if not user_question:
         return jsonify({'answer': 'No se recibió ninguna pregunta.'}), 400
 
-    # ... (lógica de prompt sin cambios)
+    # Definir el prompt del sistema para el asistente de IA
+    system_prompt = (
+        "Eres un experto en formulación de embutidos y procesamiento de alimentos. "
+        "Responde de manera clara, precisa y profesional a las preguntas de los usuarios sobre formulación, ingredientes, procesos y normativas."
+    )
 
     try:
         response = client.chat.completions.create(
@@ -284,7 +288,23 @@ def analyze_formula_route(formula_id):
     # ... (lógica de la función sin cambios hasta la llamada a la API)
 
     try:
-        # ... (código de la llamada a la API)
+        # Ejemplo de llamada a la API de OpenAI para análisis de fórmula
+        system_prompt = (
+            "Eres un experto en formulación de embutidos y procesamiento de alimentos. "
+            "Analiza la siguiente fórmula y proporciona observaciones técnicas, recomendaciones de mejora y posibles riesgos."
+        )
+        formula_data = database.get_formula_by_id(formula_id)
+        if not formula_data:
+            return jsonify({'analysis': 'No se encontró la fórmula solicitada.'}), 404
+
+        user_prompt = f"Fórmula: {formula_data['nombre']}\nIngredientes: {formula_data['ingredientes']}\nProceso: {formula_data['proceso']}"
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+        )
         analysis_text = response.choices[0].message.content
         database.decrement_user_credits(current_user.id, 5) # Descontar 5 créditos por análisis
         return jsonify({'analysis': analysis_text})

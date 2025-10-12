@@ -211,13 +211,17 @@ def decrement_user_credits(user_id: int, amount: int) -> bool:
 # --- Funciones para Fórmulas ---
 def get_all_formulas(user_id: int) -> list[dict]:
     """Obtiene lista simple de todas las fórmulas para un usuario específico."""
-    conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    cursor.execute("SELECT id, product_name, creation_date FROM formulas WHERE user_id = %s ORDER BY product_name", (user_id,))
-    formulas = [dict(row) for row in cursor.fetchall()]
-    cursor.close()
-    conn.close()
-    return formulas
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cursor.execute("SELECT id, product_name, creation_date FROM formulas WHERE user_id = %s ORDER BY product_name", (user_id,))
+        formulas = [dict(row) for row in cursor.fetchall()]
+        cursor.close()
+        conn.close()
+        return formulas
+    except Exception as e:
+        print(f"ERROR obteniendo todas las fórmulas: {e}")
+        return [] # Devuelve lista vacía en caso de error
 
 def get_formula_by_id(formula_id: int, user_id: int) -> dict | None:
     conn = get_db_connection()
