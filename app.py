@@ -251,14 +251,35 @@ def chat_with_ai():
 
     data = request.json
     user_question = data.get('question')
+    
     if not user_question:
         return jsonify({'answer': 'No se recibió ninguna pregunta.'}), 400
 
-    # Definir el prompt del sistema para el asistente de IA
-    system_prompt = (
-        "Eres un experto en formulación de embutidos y procesamiento de alimentos. "
-        "Responde de manera clara, precisa y profesional a las preguntas de los usuarios sobre formulación, ingredientes, procesos y normativas."
-    )
+    bibliografia_entries = database.get_all_bibliografia()
+    contexto_bibliografico = "\n\n".join([
+        f"**Título:** {entry['titulo']}\n"
+        f"**Tipo:** {entry['tipo']}\n"
+        f"**Contenido:** {entry['contenido']}"
+        for entry in bibliografia_entries
+    ])
+
+    system_prompt = f"""
+Eres un asistente experto en tecnología de alimentos y formulación de productos. Tu tarea es responder a las preguntas del usuario de la forma más completa y actualizada posible.
+
+Para ello, debes combinar información de tres fuentes:
+1.  **La Bibliografía Interna:** Este es tu principal punto de partida. Úsala para obtener información de base y contexto específico de la empresa.
+2.  **Tu Conocimiento General como IA:** Complementa la información de la bibliografía con tu conocimiento profundo sobre el tema.
+3.  **Simulación de Búsqueda Web:** Imagina que has realizado una búsqueda en tiempo real en Google sobre el tema. Incorpora en tu respuesta las últimas tendencias, investigaciones o noticias que encontrarías.
+
+**Proceso de Respuesta:**
+- Comienza con la información de la bibliografía si es relevante.
+- Enriquece la respuesta con tu conocimiento general.
+- Finaliza añadiendo los hallazgos más recientes que una búsqueda web proporcionaría, indicando que son "tendencias recientes" o "información actualizada".
+
+--- INICIO DE LA BIBLIOGRAFÍA ---
+{contexto_bibliografico}
+--- FIN DE LA BIBLIOGRAFÍA ---
+"""
 
     try:
         response = client.chat.completions.create(
@@ -282,34 +303,67 @@ def analyze_formula_route(formula_id):
     if not client:
         return jsonify({'analysis': 'Error: La API de IA no está configurada.'}), 500
 
-    if database.get_user_credits(current_user.id) <= 0:
-        return jsonify({'analysis': 'No tienes créditos suficientes para realizar un análisis. Por favor, recarga.'}), 402
+    if database.get_user_credits(current_user.id) <= 5:
+        return jsonify({'analysis': 'No tienes créditos suficientes (se requieren 5) para realizar un análisis. Por favor, recarga.'}), 402
 
-    # ... (lógica de la función sin cambios hasta la llamada a la API)
+    formula_data = database.get_formula_by_id(formula_id, current_user.id)
+    if not formula_data:
+        return jsonify({'success': False, 'error': 'Fórmula no encontrada o sin permiso'}), 404
 
-    try:
-        # Ejemplo de llamada a la API de OpenAI para análisis de fórmula
-        system_prompt = (
-            "Eres un experto en formulación de embutidos y procesamiento de alimentos. "
-            "Analiza la siguiente fórmula y proporciona observaciones técnicas, recomendaciones de mejora y posibles riesgos."
-        )
-        formula_data = database.get_formula_by_id(formula_id)
-        if not formula_data:
-            return jsonify({'analysis': 'No se encontró la fórmula solicitada.'}), 404
+    processed_ingredients = calculations.process_ingredients_for_display(formula_data.get('ingredients', []))
+    totals = calculations.calculate_formula_totals(processed_ingredients)
 
-        user_prompt = f"Fórmula: {formula_data['nombre']}\nIngredientes: {formula_data['ingredientes']}\nProceso: {formula_data['proceso']}"
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ]
-        )
-        analysis_text = response.choices[0].message.content
-        database.decrement_user_credits(current_user.id, 5) # Descontar 5 créditos por análisis
-        return jsonify({'analysis': analysis_text})
-    except APIConnectionError as e:
-        # ... (manejo de errores)
-        return jsonify({'analysis': f'Error al contactar el servicio de IA: {e}'}), 500
+    system_prompt = "Eres un experto en tecnología de alimentos y formulación de productos. Analiza la siguiente fórmula y proporciona una evaluación y recomendaciones concisas y fáciles de entender en formato Markdown."
+
+    user_prompt = f"**Nombre del Producto:** {formula_data['product_name']}\n\n"
+    user_prompt += "**Ingredientes:**\n"
+    for ing in processed_ingredients:
+        user_prompt += f"- {ing['ingredient_name']}: {ing['original_qty_display']} {ing['original_unit']} ({ing['percentage']:.2f}%)\n"
+
+    user_prompt += f'''
+    **Resultados del Cálculo:**
+    - Peso Total: {totals.get('total_kg', 0):.3f} kg
+    - Costo Total: {totals.get('costo_total', 0):.2f}
+    - Costo por Kg: {totals.get('costo_por_kg', 0):.2f}
+    - % Proteína: {totals.get('protein_perc', 0):.2f}%
+    - % Grasa: {totals.get('fat_perc', 0):.2f}%
+    - % Humedad Total: {totals.get('water_perc', 0):.2f}%
+    - Ratio Agua/Proteína: {totals.get('aw_fp_ratio_str', 'N/A')}
+    - Ratio Grasa/Proteína: {totals.get('af_fp_ratio_str', 'N/A')}
+
+**Análisis Solicitado:**
+1.  **Evaluación General:** ¿Qué tipo de producto es? ¿La fórmula parece balanceada para su propósito?
+2.  **Puntos Fuertes:** ¿Cuáles son los aspectos positivos de esta formulación? (ej. buen perfil nutricional, bajo costo, etc.)
+3.  **Posibles Mejoras:** ¿Qué cambios sugerirías? (ej. ajustar un ingrediente para mejorar la textura, reducir costos, mejorar el perfil nutricional).
+4.  **Riesgos Potenciales:** ¿Hay algún riesgo a considerar? (ej. problemas de estabilidad, alérgenos comunes, vida útil).
+'''
+
+    print(f"INFO: Tamaño del user_prompt: {len(user_prompt)} caracteres")
+
+    retries = 3
+    for attempt in range(retries):
+        try:
+            print(f"INFO: Intento {attempt + 1}/{retries} de solicitud a OpenAI para formula_id: {formula_id}")
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
+            print(f"INFO: Solicitud a OpenAI exitosa para formula_id: {formula_id}")
+            analysis_text = response.choices[0].message.content
+            database.decrement_user_credits(current_user.id, 5)
+            return jsonify({'analysis': analysis_text})
+        except APIConnectionError as e:
+            print(f"ERROR: Intento {attempt + 1}/{retries} fallido: {e}")
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)  # Exponential backoff
+                continue
+            else:
+                print(f"ERROR TYPE: {type(e)}")
+                print(f"ERROR ARGS: {e.args}")
+                print(f"ERROR: Error al llamar a la API de OpenAI: {e}")
+                return jsonify({'analysis': f'Error al contactar el servicio de IA: {e}'}), 500
 
 # ... (resto del archivo sin cambios)
