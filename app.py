@@ -283,6 +283,25 @@ def update_formula_route(formula_id):
     else:
         return jsonify({'success': False, 'error': 'No se pudo actualizar la fórmula.'}), 500
 
+@app.route('/api/formula/<int:formula_id>', methods=['GET'])
+@login_required
+def get_formula_details(formula_id):
+    formula_data = database.get_formula_by_id(formula_id, current_user.id)
+    if not formula_data:
+        return jsonify({"error": "Fórmula no encontrada"}), 404
+
+    processed_ingredients = calculations.process_ingredients_for_display(formula_data.get('ingredients', []))
+    totals = calculations.calculate_formula_totals(processed_ingredients)
+
+    # Combinar los datos para la respuesta
+    details = {
+        **formula_data,
+        'ingredients': processed_ingredients,
+        'totals': totals
+    }
+
+    return jsonify({"details": details})
+
 
 @app.route("/api/chat", methods=['POST'])
 @login_required
