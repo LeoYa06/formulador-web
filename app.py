@@ -168,7 +168,12 @@ def logout():
 @app.route('/create-checkout-session', methods=['POST'])
 @login_required
 def create_checkout_session():
+    print(f"INFO: Stripe API Key: {stripe.api_key[:5]}..." if stripe.api_key else "ERROR: Stripe API Key no configurada.")
+    print(f"INFO: Stripe Price ID: {stripe_price_id}" if stripe_price_id else "ERROR: Stripe Price ID no configurado.")
     try:
+        if not stripe.api_key or not stripe_price_id:
+            return jsonify(error="La configuración de Stripe no está completa en el servidor."), 500
+
         checkout_session = stripe.checkout.Session.create(
             line_items=[{'price': stripe_price_id, 'quantity': 1}],
             mode='subscription',
@@ -178,6 +183,7 @@ def create_checkout_session():
         )
         return jsonify({'url': checkout_session.url})
     except Exception as e:
+        print(f"ERROR: Excepción al crear la sesión de Stripe: {e}")
         return jsonify(error=str(e)), 500
 
 @app.route('/webhook', methods=['POST'])
