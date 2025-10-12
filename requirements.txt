@@ -155,3 +155,4 @@ zope.event==6.0
 zope.interface==8.0.1
 zstandard==0.25.0
 psycogreen
+stripe==13.0.1

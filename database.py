@@ -55,6 +55,10 @@ def initialize_database():
         cursor.execute('ALTER TABLE users ADD COLUMN session_token VARCHAR(64);')
     except psycopg2.errors.DuplicateColumn:
         conn.rollback()
+    try:
+        cursor.execute('ALTER TABLE users ADD COLUMN credits INTEGER DEFAULT 0;')
+    except psycopg2.errors.DuplicateColumn:
+        conn.rollback()
     
     conn.commit()
 
@@ -93,18 +97,16 @@ from werkzeug.security import generate_password_hash, check_password_hash
 # --- Funciones para Usuarios ---
 def add_user(username: str, password: str, full_name: str, verification_code: str = None, code_expiry: datetime = None) -> bool:
     """
-    Añade un nuevo usuario a la base de datos.
-    Hashea la contraseña para un almacenamiento seguro.
-    Guarda el código de verificación y su expiración.
-    Devuelve True si fue exitoso, False si el usuario ya existe.
+    Añade un nuevo usuario a la base de datos con 100 créditos de prueba.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
     password_hash = generate_password_hash(password)
+    initial_credits = 100  # Créditos de prueba
     try:
         cursor.execute(
-            "INSERT INTO users (username, password_hash, full_name, verification_code, code_expiry) VALUES (%s, %s, %s, %s, %s)",
-            (username, password_hash, full_name, verification_code, code_expiry)
+            "INSERT INTO users (username, password_hash, full_name, verification_code, code_expiry, credits) VALUES (%s, %s, %s, %s, %s, %s)",
+            (username, password_hash, full_name, verification_code, code_expiry, initial_credits)
         )
         conn.commit()
         return True
@@ -151,6 +153,55 @@ def verify_user(username: str) -> bool:
         return cursor.rowcount > 0
     except Exception as e:
         print(f"ERROR al verificar usuario: {e}")
+        conn.rollback()
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
+# --- Funciones para Créditos ---
+
+def get_user_credits(user_id: int) -> int:
+    """Obtiene los créditos de un usuario."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT credits FROM users WHERE id = %s", (user_id,))
+        result = cursor.fetchone()
+        return result[0] if result and result[0] is not None else 0
+    except Exception as e:
+        print(f"ERROR obteniendo créditos: {e}")
+        return 0
+    finally:
+        cursor.close()
+        conn.close()
+
+def add_user_credits(user_id: int, amount: int) -> bool:
+    """Añade créditos a un usuario."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE users SET credits = credits + %s WHERE id = %s", (amount, user_id))
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        print(f"ERROR añadiendo créditos: {e}")
+        conn.rollback()
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
+def decrement_user_credits(user_id: int, amount: int) -> bool:
+    """Descuenta créditos de un usuario si tiene suficientes."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE users SET credits = credits - %s WHERE id = %s AND credits >= %s", (amount, user_id, amount))
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        print(f"ERROR descontando créditos: {e}")
         conn.rollback()
         return False
     finally:
