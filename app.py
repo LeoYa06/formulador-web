@@ -305,6 +305,54 @@ def get_formula_details(formula_id):
 
     return jsonify({"details": details})
 
+@app.route('/api/formula/<int:formula_id>/ingredients/add', methods=['POST'])
+@login_required
+def add_ingredient_to_formula_route(formula_id):
+    # Primero, verificar que la fórmula pertenece al usuario actual
+    formula_data = database.get_formula_by_id(formula_id, current_user.id)
+    if not formula_data:
+        return jsonify({'success': False, 'error': 'Fórmula no encontrada o sin permiso.'}), 404
+
+    data = request.get_json()
+    ingredient_name = data.get('name')
+    quantity = data.get('quantity')
+    unit = data.get('unit')
+
+    if not all([ingredient_name, quantity, unit]):
+        return jsonify({'success': False, 'error': 'Faltan datos del ingrediente.'}), 400
+
+    # La función de base de datos se encarga de la lógica de añadir
+    database.add_ingredient_to_formula(formula_id, ingredient_name, float(quantity), unit, current_user.id)
+
+    # Después de añadir, obtenemos y devolvemos el estado actualizado de la fórmula
+    updated_formula_data = database.get_formula_by_id(formula_id, current_user.id)
+    processed_ingredients = calculations.process_ingredients_for_display(updated_formula_data.get('ingredients', []))
+    totals = calculations.calculate_formula_totals(processed_ingredients)
+    
+    response_data = {
+        'success': True,
+        'details': {
+            **updated_formula_data,
+            'ingredients': processed_ingredients,
+            'totals': totals
+        }
+    }
+    return jsonify(response_data)
+
+@app.route('/api/ingredient/<int:formula_ingredient_id>/delete', methods=['POST'])
+@login_required
+def delete_ingredient_route(formula_ingredient_id):
+    formula_id = database.get_formula_id_for_ingredient(formula_ingredient_id)
+    if not formula_id:
+        return jsonify({'success': False, 'error': 'Ingrediente no encontrado.'}), 404
+
+    # Verificar que la fórmula pertenece al usuario antes de borrar
+    if not database.get_formula_by_id(formula_id, current_user.id):
+        return jsonify({'success': False, 'error': 'No tienes permiso para esta acción.'}), 403
+
+    database.delete_ingredient(formula_ingredient_id)
+    
+    return get_formula_details(formula_id) # Reutilizamos la función para devolver la fórmula actualizada
 
 @app.route("/api/chat", methods=['POST'])
 @login_required
