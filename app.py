@@ -13,6 +13,7 @@ from flask import session
 from flask import Flask, render_template, jsonify, request, flash, redirect, url_for
 from werkzeug.security import check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from flask_wtf.csrf import CSRFProtect
 from openai import OpenAI, APIConnectionError
 from dotenv import load_dotenv
 
@@ -24,6 +25,7 @@ import calculations
 load_dotenv()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'una-clave-secreta-muy-dificil-de-adivinar')
+csrf = CSRFProtect(app)
 
 # Configuración de Stripe
 stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
@@ -181,6 +183,7 @@ def create_checkout_session():
         return jsonify(error=str(e)), 500
 
 @app.route('/webhook', methods=['POST'])
+@csrf.exempt
 def webhook():
     event = None
     payload = request.data
