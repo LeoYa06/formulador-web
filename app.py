@@ -241,6 +241,11 @@ def cuenta_page():
     credits = database.get_user_credits(current_user.id)
     return render_template('cuenta.html', credits=credits)
 
+@app.route('/terms')
+def terms():
+    """Muestra la página de términos y condiciones."""
+    return render_template('terms.html')
+
 # --- 5. RUTAS DE API ---
 
 @app.route('/api/formulas', methods=['GET'])
