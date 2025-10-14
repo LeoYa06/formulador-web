@@ -132,6 +132,7 @@
         font-size: inherit !important;
         width: 100% !important;
         box-sizing: border-box !important;
+        margin: 0 !important;
 }
     </style>
 </head>
@@ -221,7 +222,7 @@
     </div>
 
     <script>
-            // --- CÓDIGO JAVASCRIPT CORREGIDO ---
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         const formulaList = document.getElementById('lista-formulas');
         const detailsPanel = document.getElementById('details-panel');
         const analysisContainer = document.getElementById('analysis-container');
@@ -231,8 +232,6 @@
         let currentlyEditingIngredientId = null;
         let isEditingFormula = false; // Flag para evitar conflictos de edición
 
-        // Función corregida para agregar fórmulas a la lista
-        // Versión simplificada de addFormulaToList para depurar
         function addFormulaToList(formula) {
             const item = document.createElement('li');
             item.className = 'formula-item';
@@ -250,19 +249,15 @@
             item.appendChild(nameSpan);
             item.appendChild(deleteBtn);
 
-            // Variables para manejar el timing de clicks
             let clickTimeout;
             let clickCount = 0;
 
-            // Manejar clicks en el nombre
             nameSpan.addEventListener('click', (e) => {
                 clickCount++;
                 
                 if (clickCount === 1) {
-                    // Esperamos un poco para ver si hay un segundo click (doble click)
                     clickTimeout = setTimeout(() => {
                         if (!isEditingFormula) {
-                            // Es un click simple, seleccionar la fórmula
                             document.querySelectorAll('#lista-formulas li').forEach(li => li.classList.remove('selected'));
                             item.classList.add('selected');
                             currentFormulaId = formula.id;
@@ -272,9 +267,8 @@
                                 .then(data => updateDetailsView(data));
                         }
                         clickCount = 0;
-                    }, 300); // Esperamos 300ms para detectar doble click
+                    }, 300);
                 } else if (clickCount === 2) {
-                    // Es doble click, cancelar el timeout y empezar edición
                     clearTimeout(clickTimeout);
                     clickCount = 0;
                     if (!isEditingFormula) {
@@ -286,7 +280,10 @@
             deleteBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (confirm(`¿Estás seguro de que quieres eliminar la fórmula "${formula.product_name}"?`)) {
-                    fetch(`/api/formulas/${formula.id}/delete`, { method: 'POST' })
+                    fetch(`/api/formulas/${formula.id}/delete`, { 
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': csrfToken }
+                    })
                         .then(res => res.json())
                         .then(result => {
                             if (result.success) {
@@ -327,42 +324,38 @@
                 margin: 0 !important;
             `;
             
-            // Reemplazar el span con el input
             nameSpan.style.display = 'none';
             nameSpan.parentNode.insertBefore(input, nameSpan);
             
             input.focus();
             input.select();
             
-            // Función para guardar los cambios
             const saveChanges = () => {
                 const newName = input.value.trim();
                 
                 if (newName && newName !== currentName) {
-                    // Enviar actualización al servidor
                     fetch(`/api/formulas/${formulaId}/update`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                         body: JSON.stringify({ product_name: newName })
                     })
                     .then(res => res.json())
                     .then(result => {
                         if (result.success) {
                             nameSpan.textContent = newName;
-                            // Actualizar también el título en el panel de detalles si está abierto
                             if (currentFormulaId === formulaId) {
                                 document.getElementById('formula-name-display').textContent = newName;
                             }
                         } else {
                             alert('Error al actualizar: ' + result.error);
-                            nameSpan.textContent = currentName; // Revertir cambios
+                            nameSpan.textContent = currentName;
                         }
                         finishEditing();
                     })
                     .catch(error => {
                         console.error('Error:', error);
                         alert('Error de conexión');
-                        nameSpan.textContent = currentName; // Revertir cambios
+                        nameSpan.textContent = currentName;
                         finishEditing();
                     });
                 } else {
@@ -370,7 +363,6 @@
                 }
             };
             
-            // Función para terminar la edición
             const finishEditing = () => {
                 if (input.parentNode) {
                     input.parentNode.removeChild(input);
@@ -379,7 +371,6 @@
                 isEditingFormula = false;
             };
             
-            // Event listeners para guardar o cancelar
             input.addEventListener('blur', saveChanges);
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
@@ -399,7 +390,6 @@
             document.getElementById('ing-qty').value = parseFloat(ingredient.original_qty_display);
             document.getElementById('ing-unit').value = ingredient.original_unit.toLowerCase();
             
-            // CORRECCIÓN: Buscar el botón submit de forma más robusta
             const submitBtn = document.querySelector('#ingredient-form button[type="submit"]');
             if (submitBtn) {
                 submitBtn.textContent = 'Actualizar';
@@ -414,7 +404,6 @@
             ingredientForm.reset();
             document.getElementById('autocomplete-list').innerHTML = '';
             
-            // CORRECCIÓN: Buscar el botón submit de forma más robusta
             const submitBtn = document.querySelector('#ingredient-form button[type="submit"]');
             if (submitBtn) {
                 submitBtn.textContent = 'Añadir';
@@ -449,7 +438,10 @@
                 deleteBtn.className = 'btn-delete';
                 deleteBtn.onclick = () => {
                     if (confirm(`¿Eliminar "${ing.ingredient_name}" de la fórmula?`)) {
-                        fetch(`/api/ingredient/${ing.formula_ingredient_id}/delete`, { method: 'POST' })
+                        fetch(`/api/ingredient/${ing.formula_ingredient_id}/delete`, { 
+                            method: 'POST',
+                            headers: { 'X-CSRFToken': csrfToken }
+                        })
                             .then(res => res.json()).then(newData => updateDetailsView(newData));
                     }
                 };
@@ -475,26 +467,32 @@
             detailsPanel.style.display = 'block';
         }
 
-function loadFormulas() {
-    fetch('/api/formulas').then(res => res.json()).then(data => {
-        formulaList.innerHTML = '';
-        data.forEach(formula => addFormulaToList(formula));
-    });
+        function loadFormulas() {
+            fetch('/api/formulas').then(res => res.json()).then(data => {
+                formulaList.innerHTML = '';
+                data.forEach(formula => addFormulaToList(formula));
+            });
         }
 
         function analyzeFormula() {
             if (!currentFormulaId) return;
             analysisContainer.style.display = 'block';
             analysisResult.innerHTML = '<p>Analizando, por favor espere...</p>';
-            fetch(`/api/formula/${currentFormulaId}/analyze`, { method: 'POST' })
+            fetch(`/api/formula/${currentFormulaId}/analyze`, { 
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken }
+            })
                 .then(res => res.json())
                 .then(data => {
                     let htmlResponse = data.analysis.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
                     analysisResult.innerHTML = htmlResponse;
+                })
+                .catch(err => {
+                    analysisResult.innerHTML = '<p style="color: var(--danger-color);">Error: No se pudo procesar la respuesta. Es posible que la sesión haya expirado.</p>';
+                    console.error(err);
                 });
         }
 
-        // Event Listeners
         document.getElementById('add-formula-form').addEventListener('submit', function(event) {
             event.preventDefault();
             const input = document.getElementById('product-name-input');
@@ -502,11 +500,11 @@ function loadFormulas() {
             if (productName) {
                 fetch('/api/formulas/add', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                     body: JSON.stringify({ product_name: productName })
                 }).then(res => res.json()).then(result => {
                     if (result.success) {
-                        addFormulaToList(result.formula);
+                        loadFormulas(); // Recargar la lista para obtener el nuevo ID
                         input.value = '';
                     } else { 
                         alert('Error: ' + result.error); 
@@ -529,7 +527,7 @@ function loadFormulas() {
                 
             fetch(url, { 
                 method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, 
                 body: JSON.stringify(ingredientData) 
             })
             .then(res => res.json())
@@ -537,7 +535,7 @@ function loadFormulas() {
                 if(result.success) { 
                     updateDetailsView(result); 
                     resetIngredientForm(); 
-                } else { 
+                } else {
                     alert('Error: '+ result.error);
                 }
             });
@@ -581,96 +579,62 @@ function loadFormulas() {
             }
         });
 
-        // Chatbot Logic
-        // === CÓDIGO COMPLETO DEL CHATBOT ===
-
-        // 1. Event listener para abrir/cerrar el chatbot
         document.getElementById('chat-bubble').addEventListener('click', () => {
             const chatWindow = document.getElementById('chat-window');
             chatWindow.style.display = chatWindow.style.display === 'none' ? 'flex' : 'none';
         });
 
-        // 2. Event listener para enviar mensajes
         document.getElementById('chat-form').addEventListener('submit', function(event) {
             event.preventDefault();
             const chatInput = document.getElementById('chat-input');
             const userQuestion = chatInput.value.trim();
             
-            console.log('Pregunta del usuario:', userQuestion); // Debug
-            
             if (!userQuestion) return;
             
-            // Mostrar mensaje del usuario
             appendMessage(userQuestion, 'user-message');
             chatInput.value = '';
             
-            // Mostrar mensaje de "escribiendo..."
             const typingMessage = appendMessage('Escribiendo...', 'bot-message');
-            
-            console.log('Enviando petición al servidor...'); // Debug
             
             fetch('/api/chat', { 
                 method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, 
                 body: JSON.stringify({ question: userQuestion }) 
             })
-            .then(res => {
-                console.log('Respuesta recibida, status:', res.status); // Debug
-                return res.json();
-            })
+            .then(res => res.json())
             .then(data => {
-                console.log('Datos recibidos:', data); // Debug
-                
-                // Eliminar mensaje de "escribiendo..."
                 if (typingMessage && typingMessage.parentNode) {
                     typingMessage.parentNode.removeChild(typingMessage);
                 }
-                
-                // Mostrar respuesta de la IA
                 if (data.answer) {
                     appendMessage(data.answer, 'bot-message');
                 } else {
-                    console.error('No se recibió respuesta en data.answer:', data);
                     appendMessage('Error: No se recibió respuesta del servidor.', 'bot-message');
                 }
             })
             .catch(error => {
-                console.error('Error en la petición:', error);
-                
-                // Eliminar mensaje de "escribiendo..."
                 if (typingMessage && typingMessage.parentNode) {
                     typingMessage.parentNode.removeChild(typingMessage);
                 }
-                
                 appendMessage('Error de conexión. Inténtalo de nuevo.', 'bot-message');
             });
         });
 
-        // 3. Función para agregar mensajes al chat
         function appendMessage(text, className) {
             const chatHistory = document.getElementById('chat-history');
-            
-            if (!chatHistory) {
-                console.error('No se encuentra el elemento chat-history');
-                return null;
-            }
+            if (!chatHistory) return null;
             
             const messageDiv = document.createElement('div');
             messageDiv.className = `chat-message ${className}`;
             
-            // Procesar markdown básico
             let formattedText = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
             messageDiv.innerHTML = formattedText;
             
             chatHistory.appendChild(messageDiv);
             chatHistory.scrollTop = chatHistory.scrollHeight;
-            
-            console.log('Mensaje agregado:', text.substring(0, 50) + '...'); // Debug
-            
             return messageDiv;
         }
 
-        // Inicializar al cargar la página
         window.onload = loadFormulas;
     </script>
 </body>
