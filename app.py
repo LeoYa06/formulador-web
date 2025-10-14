@@ -416,6 +416,13 @@ Para ello, debes combinar información de tres fuentes:
 
     return jsonify({'answer': ai_answer})
 
+#ruta de prueba P
+@app.route('/test-post', methods=['POST'])
+@csrf.exempt
+def test_post_route():
+    print("LA RUTA DE PRUEBA /test-post FUNCIONÓ CORRECTAMENTE.")
+    return jsonify({"message": "Test OK!"}), 200
+
 @app.route("/api/formula/<int:formula_id>/analyze", methods=['POST'])
 @login_required
 def analyze_formula_route(formula_id):
