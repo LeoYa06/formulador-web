@@ -59,6 +59,10 @@ def initialize_database():
         cursor.execute('ALTER TABLE users ADD COLUMN credits INTEGER DEFAULT 0;')
     except psycopg2.errors.DuplicateColumn:
         conn.rollback()
+    try:
+        cursor.execute('ALTER TABLE users ADD COLUMN credits_expiry_date TIMESTAMP;')
+    except psycopg2.errors.DuplicateColumn:
+        conn.rollback()
     
     conn.commit()
 
@@ -97,16 +101,18 @@ from werkzeug.security import generate_password_hash, check_password_hash
 # --- Funciones para Usuarios ---
 def add_user(username: str, password: str, full_name: str, verification_code: str = None, code_expiry: datetime = None) -> bool:
     """
-    Añade un nuevo usuario a la base de datos con 100 créditos de prueba.
+    Añade un nuevo usuario a la base de datos con 100 créditos de prueba que expiran en 3 días.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
     password_hash = generate_password_hash(password)
     initial_credits = 100  # Créditos de prueba
+    # Calcula la fecha de expiración para los créditos de prueba (3 días desde ahora)
+    expiry_date = datetime.datetime.utcnow() + datetime.timedelta(days=3)
     try:
         cursor.execute(
-            "INSERT INTO users (username, password_hash, full_name, verification_code, code_expiry, credits) VALUES (%s, %s, %s, %s, %s, %s)",
-            (username, password_hash, full_name, verification_code, code_expiry, initial_credits)
+            "INSERT INTO users (username, password_hash, full_name, verification_code, code_expiry, credits, credits_expiry_date) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (username, password_hash, full_name, verification_code, code_expiry, initial_credits, expiry_date)
         )
         conn.commit()
         return True
@@ -177,11 +183,16 @@ def get_user_credits(user_id: int) -> int:
         conn.close()
 
 def add_user_credits(user_id: int, amount: int) -> bool:
-    """Añade créditos a un usuario."""
+    """Añade créditos a un usuario y extiende su expiración por 30 días."""
     conn = get_db_connection()
     cursor = conn.cursor()
+    # Calcula la nueva fecha de expiración
+    new_expiry_date = datetime.datetime.utcnow() + datetime.timedelta(days=30)
     try:
-        cursor.execute("UPDATE users SET credits = credits + %s WHERE id = %s", (amount, user_id))
+        cursor.execute(
+            "UPDATE users SET credits = credits + %s, credits_expiry_date = %s WHERE id = %s",
+            (amount, new_expiry_date, user_id)
+        )
         conn.commit()
         return cursor.rowcount > 0
     except Exception as e:
@@ -204,6 +215,35 @@ def decrement_user_credits(user_id: int, amount: int) -> bool:
         print(f"ERROR descontando créditos: {e}")
         conn.rollback()
         return False
+    finally:
+        cursor.close()
+        conn.close()
+
+def check_and_handle_credit_expiration(user_id: int) -> int:
+    """Verifica la expiración de créditos y los resetea si es necesario."""
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        cursor.execute("SELECT credits, credits_expiry_date FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+        if not user:
+            return 0
+
+        current_credits = user['credits']
+        expiry_date = user['credits_expiry_date']
+
+        if expiry_date and datetime.datetime.utcnow() > expiry_date:
+            print(f"Créditos expirados para el usuario {user_id}. Reseteando.")
+            cursor.execute("UPDATE users SET credits = 0, credits_expiry_date = NULL WHERE id = %s", (user_id,))
+            conn.commit()
+            return 0  # Devuelve 0 créditos porque acaban de expirar
+        
+        return current_credits if current_credits is not None else 0
+
+    except Exception as e:
+        print(f"Error manejando la expiración de créditos: {e}")
+        conn.rollback()
+        return 0 # Asumir 0 créditos en caso de error
     finally:
         cursor.close()
         conn.close()

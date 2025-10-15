@@ -204,6 +204,32 @@ def webhook():
             database.add_user_credits(int(user_id), 1000)
             print(f"Créditos actualizados para el usuario {user_id}.")
 
+            # Enviar correo de confirmación
+            try:
+                user_data = database.get_user_by_id(int(user_id))
+                if user_data and user_data.get('username'):
+                    user_email = user_data['username']
+                    message = Mail(
+                        from_email='info@elmefood.com',
+                        to_emails=user_email,
+                        subject='Tu Recibo de Compra en Formulador ELMEfood',
+                        html_content='''
+                            <div style="font-family: sans-serif; padding: 20px;">
+                                <h2>¡Gracias por tu suscripción!</h2>
+                                <p>Hola,</p>
+                                <p>Hemos procesado exitosamente tu pago de <strong>$5.00 USD</strong>.</p>
+                                <p>Hemos añadido <strong>1000 créditos</strong> a tu cuenta para que continúes creando.</p>
+                                <p>¡Gracias por confiar en nosotros!</p>
+                                <p>El equipo de ELMEfood</p>
+                            </div>
+                        '''
+                    )
+                    sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
+                    response = sg.send(message)
+                    print(f"Email de recibo enviado a {user_email}. Estado: {response.status_code}")
+            except Exception as e:
+                print(f"🚨 ERROR: No se pudo enviar el email de recibo. {e}")
+
     return 'Success', 200
 
 @app.route('/pago-exitoso')
@@ -365,7 +391,9 @@ def chat_with_ai():
     if not client:
         return jsonify({'answer': 'Error: La API de IA no está configurada.'}), 500
 
-    if database.get_user_credits(current_user.id) <= 0:
+    # Verificar y manejar la expiración de créditos antes de chatear
+    current_credits = database.check_and_handle_credit_expiration(current_user.id)
+    if current_credits <= 0:
         return jsonify({'answer': 'No tienes créditos suficientes. Por favor, recarga para continuar.'}), 402
 
     data = request.json
@@ -429,8 +457,13 @@ def analyze_formula_route(formula_id):
     if not client:
         return jsonify({'analysis': 'Error: La API de IA no está configurada.'}), 500
 
-    if database.get_user_credits(current_user.id) <= 5:
-        return jsonify({'analysis': 'No tienes créditos suficientes (se requieren 5) para realizar un análisis. Por favor, recarga.'}), 402
+    # Primero, verificar y manejar la expiración de créditos
+    current_credits = database.check_and_handle_credit_expiration(current_user.id)
+    
+    # Luego, verificar si hay créditos suficientes para la operación
+    required_credits = 5
+    if current_credits < required_credits:
+        return jsonify({'analysis': f'No tienes créditos suficientes (se requieren {required_credits}) para realizar un análisis. Por favor, recarga.'}), 402
 
     formula_data = database.get_formula_by_id(formula_id, current_user.id)
     if not formula_data:
