@@ -5,9 +5,20 @@
     <title>Verificar Cuenta</title>
     </head>
 <body>
-    <h2>Verifica tu Cuenta</h2>
-    <p>Hemos enviado un código de 6 dígitos a <strong>{{ email }}</strong>.</p>
-    
+    <h2>Verifica tu cuenta</h2>
+    <p>Hemos enviado un código de verificación a: <strong>{{ email }}</strong></p>
+
+    <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+        <div>
+            <label for="verification_code">Código de Verificación:</label>
+            <input type="text" id="verification_code" name="verification_code" required>
+        </div>
+        
+        <button type="submit">Verificar</button>
+    </form>
+
     {% with messages = get_flashed_messages() %}
       {% if messages %}
         <ul>
@@ -17,12 +28,5 @@
         </ul>
       {% endif %}
     {% endwith %}
-
-    <form method="POST" action="{{ url_for('verify', email=email) }}">
-        {{ csrf_token() }}
-        <label for="verification_code">Código de Verificación:</label>
-        <input type="text" id="verification_code" name="verification_code" required maxlength="6">
-        <button type="submit">Verificar</button>
-    </form>
 </body>
 </html>
