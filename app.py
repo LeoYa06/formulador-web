@@ -12,6 +12,7 @@ from sendgrid.helpers.mail import Mail
 from flask import session
 from flask import Flask, render_template, jsonify, request, flash, redirect, url_for
 from werkzeug.security import check_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_wtf import FlaskForm
 from wtforms import StringField, validators
@@ -26,6 +27,7 @@ import calculations
 # --- 1. CONFIGURACIÓN INICIAL ---
 load_dotenv()
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'una-clave-secreta-muy-dificil-de-adivinar')
 csrf = CSRFProtect(app)
 
@@ -138,7 +140,6 @@ def register():
     return render_template('register.html')
 
 @app.route('/verify', methods=['GET', 'POST'])
-@csrf.exempt
 def verify():
     email = request.args.get('email')
     form = VerificationForm()
