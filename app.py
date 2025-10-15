@@ -13,6 +13,8 @@ from flask import session
 from flask import Flask, render_template, jsonify, request, flash, redirect, url_for
 from werkzeug.security import check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from flask_wtf import FlaskForm
+from wtforms import StringField, validators
 from flask_wtf.csrf import CSRFProtect
 from openai import OpenAI, APIConnectionError
 from dotenv import load_dotenv
@@ -26,6 +28,10 @@ load_dotenv()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'una-clave-secreta-muy-dificil-de-adivinar')
 csrf = CSRFProtect(app)
+
+# Define el formulario de verificación
+class VerificationForm(FlaskForm):
+    verification_code = StringField('Código de Verificación', [validators.DataRequired(), validators.Length(min=6, max=6)])
 
 # Configuración de Stripe
 stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
@@ -134,8 +140,9 @@ def register():
 @app.route('/verify', methods=['GET', 'POST'])
 def verify():
     email = request.args.get('email')
-    if request.method == 'POST':
-        code = request.form.get('verification_code')
+    form = VerificationForm()
+    if form.validate_on_submit():
+        code = form.verification_code.data
         user_data = database.get_user_by_username(email)
 
         if user_data and not user_data['is_verified']:
@@ -154,7 +161,7 @@ def verify():
         else:
             flash('Usuario no encontrado.')
 
-    return render_template('verify.html', email=email)
+    return render_template('verify.html', email=email, form=form)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():

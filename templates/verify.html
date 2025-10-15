@@ -8,12 +8,15 @@
     <h2>Verifica tu cuenta</h2>
     <p>Hemos enviado un código de verificación a: <strong>{{ email }}</strong></p>
 
-    <form method="post">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <form method="POST" action="{{ url_for('verify', email=email) }}">
+        {{ form.hidden_tag() }}
 
         <div>
-            <label for="verification_code">Código de Verificación:</label>
-            <input type="text" id="verification_code" name="verification_code" required>
+            {{ form.verification_code.label }}
+            {{ form.verification_code(size=20) }}
+            {% for error in form.verification_code.errors %}
+                <span style="color: red;">[{{ error }}]</span>
+            {% endfor %}
         </div>
         
         <button type="submit">Verificar</button>
