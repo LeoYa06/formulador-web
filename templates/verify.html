@@ -19,6 +19,7 @@
     {% endwith %}
 
     <form method="POST" action="{{ url_for('verify', email=email) }}">
+        {{ csrf_token() }}
         <label for="verification_code">Código de Verificación:</label>
         <input type="text" id="verification_code" name="verification_code" required maxlength="6">
         <button type="submit">Verificar</button>
