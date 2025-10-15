@@ -138,6 +138,7 @@ def register():
     return render_template('register.html')
 
 @app.route('/verify', methods=['GET', 'POST'])
+@csrf.exempt
 def verify():
     email = request.args.get('email')
     form = VerificationForm()
