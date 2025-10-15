@@ -131,6 +131,31 @@ def register():
 
     return render_template('register.html')
 
+@app.route('/verify', methods=['GET', 'POST'])
+def verify():
+    email = request.args.get('email')
+    if request.method == 'POST':
+        code = request.form.get('verification_code')
+        user_data = database.get_user_by_username(email)
+
+        if user_data and not user_data['is_verified']:
+            if user_data['verification_code'] == code:
+                if datetime.utcnow() < user_data['code_expiry']:
+                    database.verify_user(email)
+                    flash('¡Tu cuenta ha sido verificada! Ahora puedes iniciar sesión.')
+                    return redirect(url_for('login'))
+                else:
+                    flash('El código de verificación ha expirado.')
+            else:
+                flash('Código de verificación incorrecto.')
+        elif user_data and user_data['is_verified']:
+            flash('Esta cuenta ya ha sido verificada.')
+            return redirect(url_for('login'))
+        else:
+            flash('Usuario no encontrado.')
+
+    return render_template('verify.html', email=email)
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """Maneja el inicio de sesión de los usuarios."""
