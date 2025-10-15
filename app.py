@@ -29,6 +29,7 @@ load_dotenv()
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'una-clave-secreta-muy-dificil-de-adivinar')
+app.config['WTF_CSRF_SSL_STRICT'] = False # Para entornos de proxy
 csrf = CSRFProtect(app)
 
 # Define el formulario de verificación
