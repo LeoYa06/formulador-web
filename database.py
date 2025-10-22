@@ -11,7 +11,9 @@ print(f"DEBUG: La URL de la base de datos en el entorno es: {DATABASE_URL}")
 
 def get_db_connection():
     """Establece conexión con la base de datos PostgreSQL."""
-    conn = psycopg2.connect(DATABASE_URL)
+    print("Intentando conectar a la base de datos...")
+    conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
+    print("Conexión a la base de datos exitosa.")
     return conn
 
 # --- Inicialización de la Base de Datos ---
@@ -455,7 +457,7 @@ def get_master_ingredients() -> list[dict]:
     results = []
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-            cursor.execute("SELECT * FROM master_ingredients ORDER BY name")
+            cursor.execute("SELECT * FROM user_ingredients ORDER BY name")
             results.extend([dict(row) for row in cursor.fetchall()])
             cursor.execute("SELECT * FROM base_ingredients ORDER BY name")
             results.extend([dict(row) for row in cursor.fetchall()])
