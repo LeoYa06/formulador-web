@@ -449,6 +449,21 @@ def get_user_ingredients(user_id: int) -> list[dict]:
     conn.close()
     return results
 
+def get_master_ingredients() -> list[dict]:
+    """Obtiene todos los ingredientes de la tabla maestra."""
+    conn = get_db_connection()
+    results = []
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+            cursor.execute("SELECT * FROM master_ingredients ORDER BY name")
+            results.extend([dict(row) for row in cursor.fetchall()])
+            cursor.execute("SELECT * FROM base_ingredients ORDER BY name")
+            results.extend([dict(row) for row in cursor.fetchall()])
+    finally:
+        conn.close()
+    return sorted(results, key=lambda x: x['name'])
+
+
 def add_user_ingredient(details: dict, user_id: int) -> int | None:
     """Añade un nuevo ingrediente a la colección de un usuario."""
     conn = get_db_connection()

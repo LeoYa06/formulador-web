@@ -309,6 +309,12 @@ def terms():
 
 # --- 5. RUTAS DE API ---
 
+@app.route('/api/ingredientes', methods=['GET'])
+@login_required
+def get_ingredientes():
+    ingredients = database.get_master_ingredients()
+    return jsonify(ingredients)
+
 @app.route('/api/formulas', methods=['GET'])
 @login_required
 def get_formulas():
