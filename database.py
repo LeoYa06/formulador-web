@@ -226,16 +226,30 @@ def get_user_credits(user_id: int) -> int:
         cursor.close()
         conn.close()
 
+# En database.py
+
 def add_user_credits(user_id: int, amount: int) -> bool:
     """Añade créditos a un usuario y extiende su expiración por 30 días."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    # Calcula la nueva fecha de expiración
-    new_expiry_date = datetime.datetime.utcnow() + datetime.timedelta(days=30)
+    
+    # --- CORREGIDO ---
+    # Calcula la nueva fecha de expiración usando una fecha "aware" (con zona horaria UTC)
+    new_expiry_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)
+    
     try:
+        # Primero, obtenemos los créditos actuales para asegurarnos de que no sean NULL
+        cursor.execute("SELECT credits FROM users WHERE id = %s", (user_id,))
+        result = cursor.fetchone()
+        current_credits = result[0] if result and result[0] is not None else 0
+        
+        # Calculamos los nuevos créditos
+        new_total_credits = current_credits + amount
+        
+        # Actualizamos
         cursor.execute(
-            "UPDATE users SET credits = credits + %s, credits_expiry_date = %s WHERE id = %s",
-            (amount, new_expiry_date, user_id)
+            "UPDATE users SET credits = %s, credits_expiry_date = %s WHERE id = %s",
+            (new_total_credits, new_expiry_date, user_id)
         )
         conn.commit()
         return cursor.rowcount > 0
