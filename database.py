@@ -3,7 +3,43 @@ import os
 import psycopg2
 import psycopg2.extras
 import datetime
+import decimal
 from werkzeug.security import generate_password_hash, check_password_hash
+
+def convert_row_to_dict(row):
+    """
+    Convierte una fila (p. ej. psycopg2.extras.DictRow) a un dict normalizando tipos:
+    - decimal.Decimal -> int (si es entero) o float
+    - datetime.datetime -> ISO string
+    - deja otros tipos tal cual
+    """
+    # Si ya es un dict simple, copiarlo y normalizar valores
+    try:
+        items = row.items()
+    except Exception:
+        # Si no tiene .items(), intentamos convertir directamente
+        try:
+            return dict(row)
+        except Exception:
+            return {}
+
+    result = {}
+    for key, value in items:
+        if isinstance(value, decimal.Decimal):
+            # Convertir Decimal a int si no tiene parte fraccionaria, sino a float
+            try:
+                if value == value.to_integral():
+                    result[key] = int(value)
+                else:
+                    result[key] = float(value)
+            except Exception:
+                result[key] = float(value)
+        elif isinstance(value, datetime.datetime):
+            # Representar fechas como ISO strings para JSON-friendliness
+            result[key] = value.isoformat()
+        else:
+            result[key] = value
+    return result
 
 # --- Configuración para PostgreSQL ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -452,18 +488,40 @@ def get_user_ingredients(user_id: int) -> list[dict]:
     return results
 
 def get_master_ingredients() -> list[dict]:
-    """Obtiene todos los ingredientes de la tabla maestra."""
+    """
+    Obtiene SÓLO los ingredientes MAESTROS (de la tabla base)
+    para evitar duplicados.
+    """
     conn = get_db_connection()
     results = []
+    
+    if conn is None:
+        print("ERROR: No se pudo obtener conexión a la base de datos en get_master_ingredients.")
+        return []
+
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
-            cursor.execute("SELECT * FROM user_ingredients ORDER BY name")
-            results.extend([dict(row) for row in cursor.fetchall()])
+            
+            # Consultamos SÓLO la tabla 'base_ingredients'.
+            # Esto soluciona el problema de los duplicados.
             cursor.execute("SELECT * FROM base_ingredients ORDER BY name")
-            results.extend([dict(row) for row in cursor.fetchall()])
+            
+            # Usamos la función auxiliar 'convert_row_to_dict' que ya deberías tener
+            # de nuestras correcciones anteriores (la que maneja 'Decimal' y 'datetime').
+            for row in cursor.fetchall():
+                results.append(convert_row_to_dict(row))
+                
+    except Exception as e:
+        print(f"ERROR al consultar base_ingredients en get_master_ingredients: {e}")
+        if conn:
+            conn.rollback()
+    
     finally:
-        conn.close()
-    return sorted(results, key=lambda x: x['name'])
+        if conn:
+            conn.close()
+            
+    # La lista ya viene ordenada de la consulta SQL (ORDER BY name)
+    return results
 
 
 def add_user_ingredient(details: dict, user_id: int) -> int | None:
