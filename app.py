@@ -358,6 +358,21 @@ def update_formula_route(formula_id):
     else:
         return jsonify({'success': False, 'error': 'No se pudo actualizar la fórmula.'}), 500
 
+@app.route('/api/bibliografia', methods=['GET'])
+@login_required
+def get_bibliografia_api():
+    """
+    Ruta de API para obtener todas las entradas de la bibliografía.
+    """
+    try:
+        # Usamos la función que ya existe en tu database.py
+        entries = database.get_all_bibliografia()
+        # Devolvemos los resultados como JSON
+        return jsonify(entries)
+    except Exception as e:
+        # Manejo de errores por si algo falla en la base de datos
+        print(f"ERROR en /api/bibliografia: {e}")
+        return jsonify({"error": "No se pudieron cargar los datos de la bibliografía"}), 500
 @app.route('/api/formula/<int:formula_id>', methods=['GET'])
 @login_required
 def get_formula_details(formula_id):
