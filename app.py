@@ -309,7 +309,7 @@ def terms():
 
 # --- 5. RUTAS DE API ---
 
-@app.route('/api/ingredientes', methods=['GET'])
+@app.route('/api/ingredients', methods=['GET'])
 @login_required
 def get_ingredientes():
     ingredients = database.get_master_ingredients()
