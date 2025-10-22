@@ -137,6 +137,8 @@ def initialize_database():
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # --- Funciones para Usuarios ---
+# En database.py
+
 def add_user(username: str, password: str, full_name: str, verification_code: str = None, code_expiry: datetime = None) -> bool:
     """
     Añade un nuevo usuario a la base de datos con 100 créditos de prueba que expiran en 3 días.
@@ -145,8 +147,12 @@ def add_user(username: str, password: str, full_name: str, verification_code: st
     cursor = conn.cursor()
     password_hash = generate_password_hash(password)
     initial_credits = 100  # Créditos de prueba
-    # Calcula la fecha de expiración para los créditos de prueba (3 días desde ahora)
-    expiry_date = datetime.datetime.utcnow() + datetime.timedelta(days=3)
+
+    # --- CORREGIDO ---
+    # Calcula la fecha de expiración usando una fecha "aware" (con zona horaria UTC)
+    # para ser consistentes.
+    expiry_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3)
+
     try:
         cursor.execute(
             "INSERT INTO users (username, password_hash, full_name, verification_code, code_expiry, credits, credits_expiry_date) VALUES (%s, %s, %s, %s, %s, %s, %s)",
@@ -257,6 +263,8 @@ def decrement_user_credits(user_id: int, amount: int) -> bool:
         cursor.close()
         conn.close()
 
+# En database.py
+
 def check_and_handle_credit_expiration(user_id: int) -> int:
     """Verifica la expiración de créditos y los resetea si es necesario."""
     conn = get_db_connection()
@@ -268,17 +276,29 @@ def check_and_handle_credit_expiration(user_id: int) -> int:
             return 0
 
         current_credits = user['credits']
-        expiry_date = user['credits_expiry_date']
+        expiry_date = user['credits_expiry_date'] # Esta fecha de Supabase es "aware" (con zona horaria)
 
-        if expiry_date and datetime.datetime.utcnow() > expiry_date:
+        # Si no hay fecha de expiración (ej. NULL), no puede expirar.
+        if not expiry_date:
+            return current_credits if current_credits is not None else 0
+
+        # --- CORREGIDO ---
+        # Obtenemos la hora actual en UTC, pero como un objeto "aware" (con zona horaria)
+        # para poder compararlo correctamente con 'expiry_date'.
+        ahora_utc = datetime.datetime.now(datetime.timezone.utc) 
+
+        # Ahora la comparación (aware > aware) funciona
+        if ahora_utc > expiry_date:
             print(f"Créditos expirados para el usuario {user_id}. Reseteando.")
             cursor.execute("UPDATE users SET credits = 0, credits_expiry_date = NULL WHERE id = %s", (user_id,))
             conn.commit()
             return 0  # Devuelve 0 créditos porque acaban de expirar
-        
+
+        # Si no ha expirado, devuelve los créditos actuales
         return current_credits if current_credits is not None else 0
 
     except Exception as e:
+        # El TypeError de la comparación "simple vs completa" caía aquí.
         print(f"Error manejando la expiración de créditos: {e}")
         conn.rollback()
         return 0 # Asumir 0 créditos en caso de error
