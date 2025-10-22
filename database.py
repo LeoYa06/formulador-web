@@ -534,6 +534,24 @@ def search_user_ingredient_names(query: str, user_id: int) -> list[str]:
     conn.close()
     return results
 
+def search_base_ingredient_names(query: str) -> list[str]:
+    """Busca nombres de ingredientes en la tabla base (base_ingredients)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    search_term = f"%{query}%"
+    
+    results = []
+    try:
+        # Asegúrate de que el nombre de la tabla 'base_ingredients' sea correcto
+        cursor.execute("SELECT name FROM base_ingredients WHERE name ILIKE %s ORDER BY name LIMIT 10", (search_term,))
+        results = [row[0] for row in cursor.fetchall()]
+    except Exception as e:
+        print(f"ERROR en search_base_ingredient_names: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+        
+    return results
 # --- Funciones de Bibliografía (sin cambios) ---
 def get_all_bibliografia() -> list[dict]:
     conn = get_db_connection()

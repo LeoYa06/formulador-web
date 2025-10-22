@@ -358,6 +358,34 @@ def update_formula_route(formula_id):
     else:
         return jsonify({'success': False, 'error': 'No se pudo actualizar la fórmula.'}), 500
 
+@app.route('/api/ingredientes/search', methods=['GET'])
+@login_required
+def search_ingredientes_api():
+    """
+    Ruta de API para buscar ingredientes por nombre (para autocompletar).
+    """
+    # Obtenemos el término de búsqueda de la URL (ej: ?q=carne)
+    query = request.args.get('q', '') 
+    
+    if not query:
+        # Si no hay término de búsqueda, devolvemos una lista vacía
+        return jsonify([])
+
+    try:
+        # 1. Usamos la función que ya tenías para los ingredientes del usuario
+        user_id = current_user.id
+        user_ingredients = database.search_user_ingredient_names(query, user_id)
+        
+        # 2. Usamos la nueva función para buscar en 'base_ingredients'
+        base_ingredients = database.search_base_ingredient_names(query)
+
+        # Combinamos las listas y eliminamos duplicados
+        combined_results = sorted(list(set(user_ingredients + base_ingredients)))
+        return jsonify(combined_results)
+        
+    except Exception as e:
+        print(f"ERROR en /api/ingredientes/search: {e}")
+        return jsonify({"error": "No se pudieron buscar los ingredientes"}), 500
 @app.route('/api/bibliografia', methods=['GET'])
 @login_required
 def get_bibliografia_api():
