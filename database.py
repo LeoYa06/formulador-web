@@ -413,48 +413,138 @@ def _get_or_create_user_ingredient(cursor, name: str, user_id: int) -> int | Non
         return cursor.fetchone()['id']
 
 # Replace the existing function in database.py with this one
+# (Pégala alrededor de la línea 525)
 
-def _get_user_ingredient_id_by_name(cursor, ingredient_name: str, user_id: int):
-    """Finds the ID of an ingredient by its name for a specific user (case-insensitive)."""
-    # Use ILIKE instead of = for a case-insensitive search
-    sql = "SELECT id FROM user_ingredients WHERE name ILIKE %s AND user_id = %s"
-    cursor.execute(sql, (ingredient_name, user_id))
-    result = cursor.fetchone()
-    if result:
-        return result['id']
-    return None # Ingredient not found for this user
+def _get_base_ingredient_data_by_name(cursor, ingredient_name: str) -> dict | None:
+    """Obtiene los datos completos de un ingrediente de la tabla base (case-insensitive)."""
+    # Esta función usa 'cursor' y no maneja la conexión (es un helper)
+    sql = 'SELECT * FROM base_ingredients WHERE name ILIKE %s'
+    try:
+        cursor.execute(sql, (ingredient_name,))
+        result = cursor.fetchone()
+        return dict(result) if result else None
+    except Exception as e:
+        print(f"ERROR en _get_base_ingredient_data_by_name: {e}")
+        return None
 
-# This is your updated main function that calls the corrected helper
+# REEMPLAZA la función _get_user_ingredient_id_by_name (en la línea 528) CON ESTA:
+
+def _get_or_create_user_ingredient_id_by_name(cursor, ingredient_name: str, user_id: int) -> int | None:
+    """
+    Busca el ID de un ingrediente en la lista del usuario.
+    Si no existe, lo busca en la lista base ('base_ingredients').
+    Si existe en la base, lo copia a la lista del usuario ('user_ingredients') y devuelve el nuevo ID.
+    Si no existe en ningún lado, devuelve None.
+    """
+    # 1. Buscar en la lista de ingredientes del usuario (como antes)
+    sql_user = "SELECT id FROM user_ingredients WHERE name ILIKE %s AND user_id = %s"
+    cursor.execute(sql_user, (ingredient_name, user_id))
+    result_user = cursor.fetchone()
+    
+    if result_user:
+        # ¡Encontrado! Devolver el ID existente.
+        return result_user['id']
+    
+    # 2. No encontrado. Buscar en la lista de ingredientes base.
+    print(f"Ingrediente '{ingredient_name}' no encontrado para user {user_id}. Buscando en la tabla base...")
+    base_ingredient_data = _get_base_ingredient_data_by_name(cursor, ingredient_name)
+    
+    if base_ingredient_data:
+        # 3. ¡Encontrado en la base! Copiarlo a la lista del usuario.
+        print(f"Encontrado en la base. Copiando a la lista del usuario {user_id}...")
+        
+        # --- Lógica de Copia (basada en tu 'seed_initial_ingredients') ---
+        try:
+            # Usamos comillas dobles para el nombre de columna con mayúsculas
+            # (basado en tu función 'seed_initial_ingredients' línea 797)
+            sql_insert = """
+                INSERT INTO user_ingredients (
+                    name, protein_percent, fat_percent, water_percent, "Ve_Protein_Percent",
+                    notes, water_retention_factor, min_usage_percent, max_usage_percent,
+                    precio_por_kg, categoria, user_id
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """
+            
+            values = (
+                base_ingredient_data['name'],
+                base_ingredient_data.get('protein_percent'),
+                base_ingredient_data.get('fat_percent'),
+                base_ingredient_data.get('water_percent'),
+                base_ingredient_data.get('Ve_Protein_Percent'), # Clave con V mayúscula
+                base_ingredient_data.get('notes'),
+                base_ingredient_data.get('water_retention_factor'),
+                base_ingredient_data.get('min_usage_percent'),
+                base_ingredient_data.get('max_usage_percent'),
+                base_ingredient_data.get('precio_por_kg'),
+                base_ingredient_data.get('categoria'),
+                user_id
+            )
+            
+            cursor.execute(sql_insert, values)
+            new_user_ingredient_id = cursor.fetchone()['id']
+            print(f"Ingrediente copiado exitosamente. Nuevo ID de user_ingredient: {new_user_ingredient_id}")
+            return new_user_ingredient_id
+
+        except psycopg2.errors.UndefinedColumn:
+            # ¡FALLBACK! La columna NO se llama "Ve_Protein_Percent" (mayúscula)
+            # Probemos con 've_protein_percent' (minúscula)
+            print("ADVERTENCIA: Falló 'Ve_Protein_Percent'. Intentando con 've_protein_percent' (minúscula)...")
+            cursor.connection.rollback() # Deshacer el INSERT fallido
+            
+            sql_insert_lowercase = """
+                INSERT INTO user_ingredients (
+                    name, protein_percent, fat_percent, water_percent, ve_protein_percent,
+                    notes, water_retention_factor, min_usage_percent, max_usage_percent,
+                    precio_por_kg, categoria, user_id
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """
+            # Los valores son los mismos, el nombre de la columna en el SQL es diferente
+            cursor.execute(sql_insert_lowercase, values)
+            new_user_ingredient_id_lc = cursor.fetchone()['id']
+            print(f"Ingrediente copiado exitosamente (usando minúscula). Nuevo ID: {new_user_ingredient_id_lc}")
+            return new_user_ingredient_id_lc
+
+        except Exception as e:
+            print(f"ERROR FATAL al copiar ingrediente de base a usuario: {e}")
+            cursor.connection.rollback()
+            return None
+        # --- Fin Lógica de Copia ---
+
+    # 4. No encontrado en ningún lado.
+    return None
+
+# REEMPLAZA la función add_ingredient_to_formula (en la línea 538) CON ESTA:
+
 def add_ingredient_to_formula(formula_id: int, ingredient_name: str, quantity: float, unit: str, user_id: int):
+    """
+    Añade un ingrediente a una fórmula, buscándolo o creándolo
+    en la lista de ingredientes del usuario (user_ingredients).
+    """
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     try:
-        # Call the new, corrected helper function
-        ingredient_id = _get_user_ingredient_id_by_name(cursor, ingredient_name, user_id)
+        # Llamar a la NUEVA función orquestadora
+        # (Fíjate que el nombre de la función cambió)
+        ingredient_id = _get_or_create_user_ingredient_id_by_name(cursor, ingredient_name, user_id)
         
         if ingredient_id:
-            # Now we use the correct ingredient_id from the user's personal list
+            # El ingrediente ya existe (o se acaba de crear) en user_ingredients.
+            # Ahora podemos añadirlo a formula_ingredients.
             cursor.execute(
                 "INSERT INTO formula_ingredients (formula_id, ingredient_id, quantity, unit) VALUES (%s, %s, %s, %s)",
                 (formula_id, ingredient_id, quantity, unit)
             )
             conn.commit()
+            print(f"Ingrediente '{ingredient_name}' (ID: {ingredient_id}) añadido exitosamente a la fórmula {formula_id}.")
         else:
-            # This handles the case where the ingredient name doesn't exist for the user
-            print(f"Error: Ingredient '{ingredient_name}' not found for user_id {user_id}")
+            # Este 'else' ahora significa que el ingrediente NO EXISTE EN NINGUNA TABLA
+            print(f"Error FATAL: Ingrediente '{ingredient_name}' no fue encontrado NI en user_ingredients NI en base_ingredients.")
             conn.rollback()
-    finally:
-        cursor.close()
-        conn.close()
-
-def update_ingredient(formula_ingredient_id: int, name: str, quantity: float, unit: str, user_id: int):
-    conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    try:
-        ingredient_user_id = _get_or_create_user_ingredient(cursor, name, user_id)
-        cursor.execute("UPDATE formula_ingredients SET ingredient_id = %s, quantity = %s, unit = %s WHERE id = %s",
-                       (ingredient_user_id, quantity, unit, formula_ingredient_id))
-        conn.commit()
+    except Exception as e:
+        print(f"ERROR en add_ingredient_to_formula: {e}")
+        conn.rollback()
     finally:
         cursor.close()
         conn.close()
