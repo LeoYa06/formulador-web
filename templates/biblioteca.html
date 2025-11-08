@@ -72,7 +72,6 @@
         }
         .card h1, .card h2, .card h3 {
             margin-top: 0;
-            border-bottom: 1px solid var(--border-color);
             padding-bottom: 15px;
             margin-bottom: 20px;
         }
@@ -149,7 +148,8 @@
         const entriesContainer = document.getElementById('entries-container');
         let allEntries = []; // Guardaremos todas las entradas aquí para filtrar
 
-        // --- FUNCIÓN PARA MOSTRAR LAS ENTRADAS ---\n        function displayEntries(entriesToDisplay) {
+        // --- FUNCIÓN PARA MOSTRAR LAS ENTRADAS ---
+        function displayEntries(entriesToDisplay) {
             entriesContainer.innerHTML = ''; // Limpiar
             if (entriesToDisplay.length === 0) {
                 entriesContainer.innerHTML = '<p>No se encontraron resultados.</p>';
@@ -167,6 +167,20 @@
             });
         }
 
+        function performSearch() {
+            const query = searchBox.value.toLowerCase();
+            if (!query) {
+                displayEntries(allEntries); // Si la búsqueda está vacía, mostrar todo
+                return;
+            }
+            const filteredEntries = allEntries.filter(entry => {
+                const titleMatch = entry.titulo.toLowerCase().includes(query);
+                const contentMatch = entry.contenido.toLowerCase().includes(query);
+                return titleMatch || contentMatch;
+            });
+            displayEntries(filteredEntries);
+        }
+
         // --- CARGA INICIAL DE DATOS ---
         window.onload = function() {
             fetch('/api/bibliografia')
@@ -179,18 +193,16 @@
         };
 
         // --- MANEJADOR DE LA BÚSQUEDA ---
-        searchBox.addEventListener('input', function() {
-            const query = this.value.toLowerCase();
-            if (!query) {
-                displayEntries(allEntries); // Si la búsqueda está vacía, mostrar todo
-                return;
+        // 1. Filtrar mientras escribes (como antes)
+        searchBox.addEventListener('input', performSearch);
+
+        // 2. ¡NUEVO! Manejar la tecla "Enter"
+        searchBox.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault(); // Evitar que el formulario se envíe (si lo fuera)
+                performSearch(); // Ejecutar la misma función de búsqueda
+                searchBox.blur(); // Quitar el foco del input (opcional, pero da feedback)
             }
-            const filteredEntries = allEntries.filter(entry => {
-                const titleMatch = entry.titulo.toLowerCase().includes(query);
-                const contentMatch = entry.contenido.toLowerCase().includes(query);
-                return titleMatch || contentMatch;
-            });
-            displayEntries(filteredEntries);
         });
     </script>
 </body>

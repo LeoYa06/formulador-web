@@ -600,6 +600,44 @@ def get_formula_id_for_ingredient(formula_ingredient_id: int) -> int | None:
     conn.close()
     return result['formula_id'] if result else None
 
+def update_ingredient(formula_ingredient_id: int, new_name: str, new_quantity: float, new_unit: str, user_id: int) -> bool:
+    """
+    Actualiza un ingrediente dentro de una fórmula.
+    Esto implica:
+    1. Encontrar/crear el 'user_ingredient_id' basado en el nuevo nombre.
+    2. Actualizar la entrada en 'formula_ingredients' con el nuevo ID, cantidad y unidad.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        # 1. Usamos el helper que ya existe para encontrar el ID del ingrediente
+        # (ya sea que exista en 'user_ingredients' o lo copie de 'base_ingredients')
+        new_ingredient_id = _get_or_create_user_ingredient_id_by_name(cursor, new_name, user_id)
+
+        if not new_ingredient_id:
+            # Esto no debería pasar si el helper funciona
+            print(f"ERROR: No se pudo encontrar o crear el ID para el ingrediente '{new_name}'")
+            conn.rollback()
+            return False
+
+        # 2. Actualizamos la tabla 'formula_ingredients'
+        sql = """
+            UPDATE formula_ingredients
+            SET ingredient_id = %s, quantity = %s, unit = %s
+            WHERE id = %s
+        """
+        cursor.execute(sql, (new_ingredient_id, new_quantity, new_unit, formula_ingredient_id))
+        conn.commit()
+        return cursor.rowcount > 0 # Devuelve True si se actualizó 1 fila
+
+    except Exception as e:
+        print(f"ERROR en update_ingredient: {e}")
+        conn.rollback()
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
 # --- Funciones de Ingredientes de Usuario ---
 def get_user_ingredients(user_id: int) -> list[dict]:
     """Obtiene todos los ingredientes para un usuario específico."""

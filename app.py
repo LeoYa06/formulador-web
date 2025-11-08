@@ -471,6 +471,114 @@ def delete_ingredient_route(formula_ingredient_id):
     
     return get_formula_details(formula_id) # Reutilizamos la función para devolver la fórmula actualizada
 
+@app.route('/api/ingredient/<int:formula_ingredient_id>/update', methods=['POST'])
+@login_required
+def update_ingredient_route(formula_ingredient_id):
+    # 1. Obtener los nuevos datos enviados desde el frontend
+    data = request.get_json()
+    new_name = data.get('name')
+    new_quantity = data.get('quantity')
+    new_unit = data.get('unit')
+
+    if not all([new_name, new_quantity, new_unit]):
+        return jsonify({'success': False, 'error': 'Faltan datos para actualizar.'}), 400
+
+    # 2. Verificar que el ingrediente y la fórmula pertenecen al usuario
+    formula_id = database.get_formula_id_for_ingredient(formula_ingredient_id)
+    if not formula_id:
+        return jsonify({'success': False, 'error': 'Ingrediente no encontrado.'}), 404
+
+    if not database.get_formula_by_id(formula_id, current_user.id):
+        return jsonify({'success': False, 'error': 'No tienes permiso para esta acción.'}), 403
+
+    # 3. Llamar a una nueva función de base de datos (que debes crear en database.py)
+    try:
+        # Nota: Deberás crear esta función 'update_ingredient' en tu database.py
+        database.update_ingredient(
+            formula_ingredient_id, 
+            new_name, 
+            float(new_quantity), 
+            new_unit,
+            current_user.id
+        )
+    except Exception as e:
+        print(f"Error al actualizar ingrediente: {e}")
+        return jsonify({'success': False, 'error': 'Error interno al actualizar.'}), 500
+
+    # 4. Devolver la fórmula actualizada (ESTO ES UN JSON VÁLIDO)
+    return get_formula_details(formula_id)
+
+@app.route('/api/bibliografia/add', methods=['POST'])
+@login_required
+def add_bibliografia_route():
+    data = request.get_json()
+    titulo = data.get('titulo')
+    tipo = data.get('tipo')
+    contenido = data.get('contenido')
+
+    if not all([titulo, tipo, contenido]):
+        return jsonify({'success': False, 'error': 'Todos los campos son requeridos.'}), 400
+
+    try:
+        # Llamamos a la función que ya existe en tu database.py
+        new_id = database.add_bibliografia_entry(titulo, tipo, contenido)
+        
+        if new_id:
+            # Devolvemos una respuesta JSON exitosa
+            return jsonify({'success': True, 'new_id': new_id}), 201
+        else:
+            return jsonify({'success': False, 'error': 'Error al guardar en la base de datos.'}), 500
+            
+    except Exception as e:
+        print(f"Error en add_bibliografia_route: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500 
+
+@app.route('/api/ingredientes/<int:ingredient_id>/delete', methods=['POST'])
+@login_required
+def delete_user_ingredient_route(ingredient_id):
+    try:
+        user_id = current_user.id
+        
+        # Llamamos a la función que ya existe en database.py
+        result_status = database.delete_user_ingredient(ingredient_id, user_id)
+        
+        # Devolvemos una respuesta JSON basada en el resultado
+        if result_status == 'success':
+            return jsonify({'success': True})
+        elif result_status == 'in_use':
+            # 409 Conflict - no se puede borrar porque está en uso
+            return jsonify({'success': False, 'error': 'Este ingrediente está en uso en una o más fórmulas y no puede ser eliminado.'}), 409
+        else: # 'not_found'
+            return jsonify({'success': False, 'error': 'Ingrediente no encontrado.'}), 404
+            
+    except Exception as e:
+        print(f"Error en delete_user_ingredient_route: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    
+@app.route('/api/ingredientes/<int:ingredient_id>/update', methods=['POST'])
+@login_required
+def update_user_ingredient_route(ingredient_id):
+    try:
+        user_id = current_user.id
+        details = request.get_json()
+
+        if not details:
+            return jsonify({'success': False, 'error': 'No se recibieron datos.'}), 400
+
+        # Llamamos a la función que ya existe en database.py
+        success = database.update_user_ingredient(ingredient_id, details, user_id)
+        
+        if success:
+            # Devolvemos una respuesta JSON exitosa
+            return jsonify({'success': True})
+        else:
+            # 404 o 409 (si el nombre ya existe)
+            return jsonify({'success': False, 'error': 'No se pudo actualizar el ingrediente. Es posible que el nombre ya exista o que el ingrediente no se haya encontrado.'}), 404
+            
+    except Exception as e:
+        print(f"Error en update_user_ingredient_route: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route("/api/chat", methods=['POST'])
 @login_required
 def chat_with_ai():
