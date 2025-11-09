@@ -140,29 +140,26 @@ from werkzeug.security import generate_password_hash, check_password_hash
 # En database.py
 
 def add_user(username: str, password: str, full_name: str, verification_code: str = None, code_expiry: datetime = None) -> bool:
-    """
-    Añade un nuevo usuario a la base de datos con 100 créditos de prueba que expiran en 3 días.
-    """
+    """Añade un nuevo usuario y devuelve su ID, o None si falla."""
     conn = get_db_connection()
     cursor = conn.cursor()
     password_hash = generate_password_hash(password)
     initial_credits = 100  # Créditos de prueba
 
     # --- CORREGIDO ---
-    # Calcula la fecha de expiración usando una fecha "aware" (con zona horaria UTC)
-    # para ser consistentes.
     expiry_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3)
 
     try:
         cursor.execute(
-            "INSERT INTO users (username, password_hash, full_name, verification_code, code_expiry, credits, credits_expiry_date) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            "INSERT INTO users (username, password_hash, full_name, verification_code, code_expiry, credits, credits_expiry_date) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
             (username, password_hash, full_name, verification_code, code_expiry, initial_credits, expiry_date)
         )
+        new_user_id = cursor.fetchone()[0]
         conn.commit()
-        return True
+        return new_user_id
     except psycopg2.IntegrityError:
         conn.rollback()
-        return False
+        return None
     finally:
         cursor.close()
         conn.close()

@@ -118,7 +118,12 @@ def register():
         verification_code = str(random.randint(100000, 999999))
         code_expiry = datetime.utcnow() + timedelta(minutes=15)
 
-        if database.add_user(username, password, full_name, verification_code, code_expiry):
+        new_user_id = database.add_user(username, password, full_name, verification_code, code_expiry)
+
+        if new_user_id:
+            # ¡ÉXITO! Ahora poblamos su lista de ingredientes personal
+            database.seed_initial_ingredients(new_user_id)
+
             message = Mail(
                 from_email='info@elmefood.com',
                 to_emails=username,
