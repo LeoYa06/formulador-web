@@ -604,6 +604,63 @@ def update_bibliografia_route(entry_id):
         print(f"Error en update_bibliografia_route: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/ingredientes/add', methods=['POST'])
+@login_required
+def add_user_ingredient_route():
+    """Añade un ingrediente a la lista 'user_ingredients'."""
+    try:
+        details = request.get_json()
+        if not details.get('name'):
+            return jsonify({'success': False, 'error': 'El nombre es requerido.'}), 400
+        
+        new_id = database.add_user_ingredient(details, current_user.id)
+        if new_id:
+            return jsonify({'success': True, 'id': new_id})
+        else:
+            return jsonify({'success': False, 'error': 'El ingrediente ya existe.'}), 409
+            
+    except Exception as e:
+        print(f"Error en add_user_ingredient_route: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ingredientes/<int:ingredient_id>/update', methods=['POST'])
+@login_required
+def update_user_ingredient_route(ingredient_id):
+    """Actualiza un ingrediente en la lista 'user_ingredients'."""
+    try:
+        details = request.get_json()
+        if not details.get('name'):
+            return jsonify({'success': False, 'error': 'El nombre es requerido.'}), 400
+
+        success = database.update_user_ingredient(ingredient_id, details, current_user.id)
+        
+        if success:
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': 'No se pudo actualizar o el ingrediente no se encontró.'}), 404
+            
+    except Exception as e:
+        print(f"Error en update_user_ingredient_route: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ingredientes/<int:ingredient_id>/delete', methods=['POST'])
+@login_required
+def delete_user_ingredient_route(ingredient_id):
+    """Elimina un ingrediente de la lista 'user_ingredients'."""
+    try:
+        status = database.delete_user_ingredient(ingredient_id, current_user.id)
+        
+        if status == 'success':
+            return jsonify({'success': True})
+        elif status == 'in_use':
+            return jsonify({'success': False, 'error': 'El ingrediente está en uso en una fórmula y no se puede eliminar.'}), 409
+        else:
+            return jsonify({'success': False, 'error': 'Ingrediente no encontrado.'}), 404
+            
+    except Exception as e:
+        print(f"Error en delete_user_ingredient_route: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/bibliografia/<int:entry_id>/delete', methods=['POST'])
 @login_required
 def delete_bibliografia_route(entry_id):
