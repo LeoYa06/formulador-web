@@ -317,8 +317,12 @@ def terms():
 @app.route('/api/ingredients', methods=['GET'])
 @login_required
 def get_ingredientes():
-    ingredients = database.get_master_ingredients()
-    return jsonify(ingredients)
+    """
+    Devuelve los ingredientes PERSONALES del usuario actual.
+    Esto es para la página de 'Gestión de Ingredientes'.
+    """
+    user_ingredients = database.get_user_ingredients(current_user.id)
+    return jsonify(user_ingredients)
 
 @app.route('/api/formulas', methods=['GET'])
 @login_required
