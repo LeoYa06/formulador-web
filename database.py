@@ -458,7 +458,6 @@ def update_formula_name(formula_id: int, new_name: str, user_id: int) -> bool:
 
 # --- Funciones para Ingredientes en Fórmulas ---
 
-# ¡NUEVO COMENTARIO!
 # Esta es una función "helper" interna.
 # NO abre/cierra conexiones, sino que reutiliza el cursor que se le pasa.
 def _get_base_ingredient_data_by_name(cursor, ingredient_name: str) -> dict | None:
@@ -472,102 +471,120 @@ def _get_base_ingredient_data_by_name(cursor, ingredient_name: str) -> dict | No
         log.error(f"ERROR en _get_base_ingredient_data_by_name: {e}")
         return None
 
-# ¡NUEVO COMENTARIO!
-# Esta es una función "helper" interna.
-# NO abre/cierra conexiones, sino que reutiliza el cursor que se le pasa.
+# --- ¡MODIFICADO! LÓGICA ATÓMICA PARA PREVENIR RACE CONDITIONS ---
 def _get_or_create_user_ingredient_id_by_name(cursor, ingredient_name: str, user_id: int) -> int | None:
     """
-    Busca el ID de un ingrediente en la lista del usuario ('user_ingredients').
-    Si no existe, lo busca en 'base_ingredients'.
-    Si existe en la base, lo copia a 'user_ingredients' y devuelve el nuevo ID.
-    Si no existe en ningún lado, devuelve None.
+    Busca el ID de un ingrediente en la lista del usuario ('user_ingredients') usando ILIKE.
+    Si no existe, lo busca en 'base_ingredients' (ILIKE).
+    Si existe en la base, lo copia a 'user_ingredients' de forma atómica usando
+    INSERT ... ON CONFLICT y devuelve el ID.
     
     IMPORTANTE: Esta función es un helper, asume que ya está dentro de una
-    transacción y reutiliza el cursor proporcionado. No hace commit ni rollback.
+    transacción y reutiliza el cursor proporcionado.
     """
-    # 1. Buscar en la lista de ingredientes del usuario
-    sql_user = "SELECT id FROM user_ingredients WHERE name ILIKE %s AND user_id = %s"
-    cursor.execute(sql_user, (ingredient_name, user_id))
+    
+    # 1. Buscar en la lista de ingredientes del usuario (case-insensitive)
+    sql_user_select = "SELECT id FROM user_ingredients WHERE name ILIKE %s AND user_id = %s"
+    cursor.execute(sql_user_select, (ingredient_name, user_id))
     result_user = cursor.fetchone()
     
     if result_user:
         return result_user['id']
     
-    # 2. No encontrado. Buscar en la lista de ingredientes base.
+    # 2. No encontrado. Buscar en la lista de ingredientes base (case-insensitive).
     log.info(f"Ingrediente '{ingredient_name}' no encontrado para user {user_id}. Buscando en la tabla base...")
     base_ingredient_data = _get_base_ingredient_data_by_name(cursor, ingredient_name)
     
-    if base_ingredient_data:
-        # 3. Encontrado en la base. Copiarlo a la lista del usuario.
-        log.info(f"Encontrado en la base. Copiando a la lista del usuario {user_id}...")
+    if not base_ingredient_data:
+        # Ingrediente no existe en ningún lado
+        log.error(f"Error FATAL: Ingrediente '{ingredient_name}' no fue encontrado NI en user_ingredients NI en base_ingredients.")
+        return None
+
+    # 3. Encontrado en la base. Copiarlo a 'user_ingredients' usando INSERT... ON CONFLICT.
+    # Usamos el nombre *exacto* de la tabla base para la inserción.
+    exact_name = base_ingredient_data['name']
+    
+    # Preparamos los valores
+    values = (
+        exact_name, # Usamos el nombre exacto
+        base_ingredient_data.get('protein_percent'),
+        base_ingredient_data.get('fat_percent'),
+        base_ingredient_data.get('water_percent'),
+        base_ingredient_data.get('ve_protein_percent'), # Intentamos con minúscula
+        base_ingredient_data.get('notes'),
+        base_ingredient_data.get('water_retention_factor'),
+        base_ingredient_data.get('min_usage_percent'),
+        base_ingredient_data.get('max_usage_percent'),
+        base_ingredient_data.get('precio_por_kg'),
+        base_ingredient_data.get('categoria'),
+        user_id
+    )
+
+    try:
+        # Intentamos insertar con la columna 've_protein_percent' (minúscula)
+        sql_insert_atomic = """
+            INSERT INTO user_ingredients (
+                name, protein_percent, fat_percent, water_percent, ve_protein_percent,
+                notes, water_retention_factor, min_usage_percent, max_usage_percent,
+                precio_por_kg, categoria, user_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (name, user_id) DO NOTHING
+        """
+        cursor.execute(sql_insert_atomic, values)
+
+    except psycopg2.errors.UndefinedColumn:
+        log.warning("ADVERTENCIA: Falló 've_protein_percent'. Intentando con 'Ve_Protein_Percent' (mayúscula)...")
+        # El cursor ya está en estado de error, la transacción se abortará.
+        # El 'with cursor' de la función que nos llamó hará rollback.
+        # Debemos hacer rollback aquí para poder re-intentar.
+        cursor.connection.rollback() # Hacemos rollback de la transacción fallida
         
-        try:
-            # Intentamos con 've_protein_percent' (minúscula) primero
-            sql_insert = """
-                INSERT INTO user_ingredients (
-                    name, protein_percent, fat_percent, water_percent, ve_protein_percent,
-                    notes, water_retention_factor, min_usage_percent, max_usage_percent,
-                    precio_por_kg, categoria, user_id
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
-            """
-            values = (
-                base_ingredient_data['name'],
-                base_ingredient_data.get('protein_percent'),
-                base_ingredient_data.get('fat_percent'),
-                base_ingredient_data.get('water_percent'),
-                base_ingredient_data.get('ve_protein_percent'),
-                base_ingredient_data.get('notes'),
-                base_ingredient_data.get('water_retention_factor'),
-                base_ingredient_data.get('min_usage_percent'),
-                base_ingredient_data.get('max_usage_percent'),
-                base_ingredient_data.get('precio_por_kg'),
-                base_ingredient_data.get('categoria'),
-                user_id
-            )
-            cursor.execute(sql_insert, values)
-            new_user_ingredient_id = cursor.fetchone()['id']
-            log.info(f"Ingrediente copiado exitosamente. Nuevo ID de user_ingredient: {new_user_ingredient_id}")
-            return new_user_ingredient_id
+        # Re-preparamos los valores para el fallback
+        values_uc = (
+            exact_name,
+            base_ingredient_data.get('protein_percent'),
+            base_ingredient_data.get('fat_percent'),
+            base_ingredient_data.get('water_percent'),
+            base_ingredient_data.get('Ve_Protein_Percent'), # Usamos mayúscula
+            base_ingredient_data.get('notes'),
+            base_ingredient_data.get('water_retention_factor'),
+            base_ingredient_data.get('min_usage_percent'),
+            base_ingredient_data.get('max_usage_percent'),
+            base_ingredient_data.get('precio_por_kg'),
+            base_ingredient_data.get('categoria'),
+            user_id
+        )
+        
+        # Intentamos insertar con la columna "Ve_Protein_Percent" (mayúscula)
+        sql_insert_uppercase_atomic = """
+            INSERT INTO user_ingredients (
+                name, protein_percent, fat_percent, water_percent, "Ve_Protein_Percent",
+                notes, water_retention_factor, min_usage_percent, max_usage_percent,
+                precio_por_kg, categoria, user_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (name, user_id) DO NOTHING
+        """
+        cursor.execute(sql_insert_uppercase_atomic, values_uc)
+    
+    except Exception as e:
+        log.error(f"ERROR FATAL al copiar ingrediente de base a usuario (atomic): {e}")
+        # El rollback será automático
+        return None
 
-        except psycopg2.errors.UndefinedColumn:
-            log.warning("ADVERTENCIA: Falló 've_protein_percent'. Intentando con 'Ve_Protein_Percent' (mayúscula)...")
-            # El rollback lo debe manejar la función que llamó a este helper
-            
-            sql_insert_uppercase = """
-                INSERT INTO user_ingredients (
-                    name, protein_percent, fat_percent, water_percent, "Ve_Protein_Percent",
-                    notes, water_retention_factor, min_usage_percent, max_usage_percent,
-                    precio_por_kg, categoria, user_id
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
-            """
-            values_uc = (
-                base_ingredient_data['name'],
-                base_ingredient_data.get('protein_percent'),
-                base_ingredient_data.get('fat_percent'),
-                base_ingredient_data.get('water_percent'),
-                base_ingredient_data.get('Ve_Protein_Percent'),
-                base_ingredient_data.get('notes'),
-                base_ingredient_data.get('water_retention_factor'),
-                base_ingredient_data.get('min_usage_percent'),
-                base_ingredient_data.get('max_usage_percent'),
-                base_ingredient_data.get('precio_por_kg'),
-                base_ingredient_data.get('categoria'),
-                user_id
-            )
-            cursor.execute(sql_insert_uppercase, values_uc)
-            new_user_ingredient_id_uc = cursor.fetchone()['id']
-            log.info(f"Ingrediente copiado exitosamente (usando mayúscula). Nuevo ID: {new_user_ingredient_id_uc}")
-            return new_user_ingredient_id_uc
-
-        except Exception as e:
-            log.error(f"ERROR FATAL al copiar ingrediente de base a usuario: {e}")
-            # El rollback lo debe manejar la función que llamó a este helper
-            return None
-
-    # 4. No encontrado en ningún lado.
-    return None
+    # 4. En este punto, el ingrediente DEBE existir.
+    # (ya sea porque estaba, lo insertamos nosotros, o lo insertó otra petición)
+    # Lo volvemos a buscar para obtener el ID de forma segura.
+    log.debug(f"Buscando ID final para '{ingredient_name}' después del insert atómico.")
+    cursor.execute(sql_user_select, (ingredient_name, user_id))
+    result_final = cursor.fetchone()
+    
+    if result_final:
+        return result_final['id']
+    else:
+        # Esto no debería ocurrir
+        log.error(f"ERROR CRÍTICO: No se encontró el ingrediente '{ingredient_name}' después del INSERT ON CONFLICT.")
+        return None
+# --- FIN DE LA MODIFICACIÓN ATÓMICA ---
 
 def add_ingredient_to_formula(formula_id: int, ingredient_name: str, quantity: float, unit: str, user_id: int):
     """Añade un ingrediente a una fórmula."""
@@ -580,14 +597,14 @@ def add_ingredient_to_formula(formula_id: int, ingredient_name: str, quantity: f
                 
                 if ingredient_id:
                     cursor.execute(sql, (formula_id, ingredient_id, quantity, unit))
-                    conn.commit() # Commit explícito porque _get_or_create puede hacer INSERTs
+                    # ¡LIMPIADO! Commit/Rollback es automático por el 'with cursor'.
                     log.info(f"Ingrediente '{ingredient_name}' (ID: {ingredient_id}) añadido exitosamente a la fórmula {formula_id}.")
                 else:
                     log.error(f"Error FATAL: Ingrediente '{ingredient_name}' no fue encontrado NI en user_ingredients NI en base_ingredients.")
-                    conn.rollback()
+                    # El 'with cursor' hará rollback automático
     except Exception as e:
         log.error(f"ERROR en add_ingredient_to_formula: {e}")
-        # Rollback automático (si la excepción ocurrió en el 'with cursor')
+        # Rollback automático
 
 def delete_ingredient(formula_ingredient_id: int):
     sql = "DELETE FROM formula_ingredients WHERE id = %s"
@@ -627,7 +644,7 @@ def update_ingredient(formula_ingredient_id: int, new_name: str, new_quantity: f
                     return False
 
                 cursor.execute(sql_update, (new_ingredient_id, new_quantity, new_unit, formula_ingredient_id))
-                conn.commit() # Commit explícito porque _get_or_create puede hacer INSERTs
+                # ¡LIMPIADO! Commit/Rollback es automático por el 'with cursor'.
                 return cursor.rowcount > 0 
     except Exception as e:
         log.error(f"ERROR en update_ingredient: {e}")
