@@ -46,6 +46,12 @@ def convert_row_to_dict(row):
 
 # --- Configuración para PostgreSQL ---
 DATABASE_URL = os.getenv("DATABASE_URL")
+
+# --- Forzar SSL para entornos de producción como Render ---
+if DATABASE_URL and 'sslmode' not in DATABASE_URL and 'localhost' not in DATABASE_URL:
+    DATABASE_URL += "?sslmode=require"
+    log.info("Añadiendo '?sslmode=require' a la DATABASE_URL para conexión de producción.")
+
 log.info(f"Conectando a la URL de la base de datos: {DATABASE_URL[:30]}...") 
 
 # --- CREACIÓN DEL POOL DE CONEXIONES ---
@@ -195,17 +201,12 @@ def initialize_database():
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS users (
                         id SERIAL PRIMARY KEY, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL,
-                        full_name TEXT, is_verified BOOLEAN DEFAULT FALSE, verification_code TEXT,
-                        code_expiry TIMESTAMP, session_token VARCHAR(64)
+                        full_name TEXT, is_verified BOOLEAN DEFAULT TRUE, session_token VARCHAR(64)
                     );
                 ''')
                 try: cursor.execute('ALTER TABLE users ADD COLUMN full_name TEXT;')
                 except psycopg2.errors.DuplicateColumn: conn.rollback()
-                try: cursor.execute('ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT FALSE;')
-                except psycopg2.errors.DuplicateColumn: conn.rollback()
-                try: cursor.execute('ALTER TABLE users ADD COLUMN verification_code TEXT;')
-                except psycopg2.errors.DuplicateColumn: conn.rollback()
-                try: cursor.execute('ALTER TABLE users ADD COLUMN code_expiry TIMESTAMP;')
+                try: cursor.execute('ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT TRUE;')
                 except psycopg2.errors.DuplicateColumn: conn.rollback()
                 try: cursor.execute('ALTER TABLE users ADD COLUMN session_token VARCHAR(64);')
                 except psycopg2.errors.DuplicateColumn: conn.rollback()
@@ -240,20 +241,20 @@ def initialize_database():
 # --- Funciones para Usuarios ---
 
 @retry_on_connection_error()
-def add_user(username: str, password: str, full_name: str, verification_code: str = None, code_expiry: datetime = None) -> bool:
+def add_user(username: str, password: str, full_name: str) -> bool:
     """Añade un nuevo usuario y devuelve su ID, o None si falla."""
     password_hash = generate_password_hash(password)
     initial_credits = 100
     expiry_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3)
     sql = """
-        INSERT INTO users (username, password_hash, full_name, verification_code, code_expiry, credits, credits_expiry_date) 
-        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
+        INSERT INTO users (username, password_hash, full_name, is_verified, credits, credits_expiry_date) 
+        VALUES (%s, %s, %s, TRUE, %s, %s) RETURNING id
     """
     try:
         with get_db_connection_context() as conn:
             with conn: # Gestor de transacción
                 with conn.cursor() as cursor:
-                    cursor.execute(sql, (username, password_hash, full_name, verification_code, code_expiry, initial_credits, expiry_date))
+                    cursor.execute(sql, (username, password_hash, full_name, initial_credits, expiry_date))
                     new_user_id = cursor.fetchone()[0]
                     return new_user_id
     except psycopg2.IntegrityError:

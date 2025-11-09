@@ -1,7 +1,6 @@
 Flask==3.1.0
 stripe==13.0.1
 openai==1.109.1
-sendgrid==6.12.4
 Flask-Login==0.6.3
 Flask-WTF==1.2.1
 python-dotenv==1.1.1

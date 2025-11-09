@@ -4,18 +4,13 @@ import random
 import secrets
 import time
 import httpx
-import certifi
 import stripe
 from datetime import datetime, timedelta
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
 from flask import session
 from flask import Flask, render_template, jsonify, request, flash, redirect, url_for
 from werkzeug.security import check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
-from flask_wtf import FlaskForm
-from wtforms import StringField, validators
 from flask_wtf.csrf import CSRFProtect
 from openai import OpenAI, APIConnectionError
 from dotenv import load_dotenv
@@ -31,10 +26,6 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'una-clave-secreta-muy-dificil-de-adivinar')
 app.config['WTF_CSRF_SSL_STRICT'] = False # Para entornos de proxy
 csrf = CSRFProtect(app)
-
-# Define el formulario de verificación
-class VerificationForm(FlaskForm):
-    verification_code = StringField('Código de Verificación', [validators.DataRequired(), validators.Length(min=6, max=6)])
 
 # Configuración de Stripe
 stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
@@ -114,64 +105,19 @@ def register():
         if database.get_user_by_username(username):
             flash('Este correo electrónico ya está registrado.')
             return redirect(url_for('register'))
-        
-        verification_code = str(random.randint(100000, 999999))
-        code_expiry = datetime.utcnow() + timedelta(minutes=15)
 
-        # Modificado: Capturamos el ID del nuevo usuario
-        new_user_id = database.add_user(username, password, full_name, verification_code, code_expiry)
+        # Modificado: Registro directo sin verificación por correo.
+        new_user_id = database.add_user(username, password, full_name)
 
         if new_user_id:
-            # Modificado: Poblamos la lista de ingredientes personal del nuevo usuario
+            # Poblamos la lista de ingredientes personal del nuevo usuario
             database.seed_initial_ingredients(new_user_id)
-
-            # El resto del proceso continúa como antes
-            message = Mail(
-                from_email='info@elmefood.com',
-                to_emails=username,
-                subject='Código de Verificación - Formulador de Embutidos',
-                html_content=f'<h3>Hola {full_name},</h3><p>Tu código de verificación es: <strong>{verification_code}</strong></p>'
-            )
-            try:
-                sendgrid_client = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
-                sendgrid_client.send(message)
-            except Exception as e:
-                print(f"Error enviando correo: {e}")
-                flash('Ocurrió un error al enviar el correo de verificación.')
-                return redirect(url_for('register'))
-
-            flash('¡Cuenta creada! Te hemos enviado un código de verificación.')
-            return redirect(url_for('verify', email=username))
+            flash('¡Cuenta creada exitosamente! Ahora puedes iniciar sesión.')
+            return redirect(url_for('login'))
         else:
             flash('Ocurrió un error al crear la cuenta.')
 
     return render_template('register.html')
-
-@app.route('/verify', methods=['GET', 'POST'])
-def verify():
-    email = request.args.get('email')
-    form = VerificationForm()
-    if form.validate_on_submit():
-        code = form.verification_code.data
-        user_data = database.get_user_by_username(email)
-
-        if user_data and not user_data['is_verified']:
-            if user_data['verification_code'] == code:
-                if datetime.utcnow() < user_data['code_expiry']:
-                    database.verify_user(email)
-                    flash('¡Tu cuenta ha sido verificada! Ahora puedes iniciar sesión.')
-                    return redirect(url_for('login'))
-                else:
-                    flash('El código de verificación ha expirado.')
-            else:
-                flash('Código de verificación incorrecto.')
-        elif user_data and user_data['is_verified']:
-            flash('Esta cuenta ya ha sido verificada.')
-            return redirect(url_for('login'))
-        else:
-            flash('Usuario no encontrado.')
-
-    return render_template('verify.html', email=email, form=form)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -185,10 +131,7 @@ def login():
         user_data = database.get_user_by_username(username)
 
         if user_data and check_password_hash(user_data['password_hash'], password):
-            if not user_data.get('is_verified'):
-                flash('Tu cuenta no está verificada.')
-                return redirect(url_for('verify', email=username))
-
+            # Modificado: Se eliminó la comprobación de 'is_verified'.
             session_token = secrets.token_hex(32)
             database.update_session_token(user_data['id'], session_token)
             session['session_token'] = session_token
@@ -246,31 +189,7 @@ def webhook():
             database.add_user_credits(int(user_id), 1000)
             print(f"Créditos actualizados para el usuario {user_id}.")
 
-            # Enviar correo de confirmación
-            try:
-                user_data = database.get_user_by_id(int(user_id))
-                if user_data and user_data.get('username'):
-                    user_email = user_data['username']
-                    message = Mail(
-                        from_email='info@elmefood.com',
-                        to_emails=user_email,
-                        subject='Tu Recibo de Compra en Formulador ELMEfood',
-                        html_content='''
-                            <div style="font-family: sans-serif; padding: 20px;">
-                                <h2>¡Gracias por tu suscripción!</h2>
-                                <p>Hola,</p>
-                                <p>Hemos procesado exitosamente tu pago de <strong>$5.00 USD</strong>.</p>
-                                <p>Hemos añadido <strong>1000 créditos</strong> a tu cuenta para que continúes creando.</p>
-                                <p>¡Gracias por confiar en nosotros!</p>
-                                <p>El equipo de ELMEfood</p>
-                            </div>
-                        '''
-                    )
-                    sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
-                    response = sg.send(message)
-                    print(f"Email de recibo enviado a {user_email}. Estado: {response.status_code}")
-            except Exception as e:
-                print(f"🚨 ERROR: No se pudo enviar el email de recibo. {e}")
+            # Se eliminó la lógica de envío de correo de confirmación con SendGrid.
 
     return 'Success', 200
 
