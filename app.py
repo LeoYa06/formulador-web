@@ -118,12 +118,14 @@ def register():
         verification_code = str(random.randint(100000, 999999))
         code_expiry = datetime.utcnow() + timedelta(minutes=15)
 
+        # Modificado: Capturamos el ID del nuevo usuario
         new_user_id = database.add_user(username, password, full_name, verification_code, code_expiry)
 
         if new_user_id:
-            # ¡ÉXITO! Ahora poblamos su lista de ingredientes personal
+            # Modificado: Poblamos la lista de ingredientes personal del nuevo usuario
             database.seed_initial_ingredients(new_user_id)
 
+            # El resto del proceso continúa como antes
             message = Mail(
                 from_email='info@elmefood.com',
                 to_emails=username,
@@ -321,6 +323,7 @@ def get_ingredientes():
     Devuelve los ingredientes PERSONALES del usuario actual.
     Esto es para la página de 'Gestión de Ingredientes'.
     """
+    # Modificado: Llama a get_user_ingredients en lugar de get_master_ingredients
     user_ingredients = database.get_user_ingredients(current_user.id)
     return jsonify(user_ingredients)
 
