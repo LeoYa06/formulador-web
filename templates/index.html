@@ -532,7 +532,7 @@
             })
             .then(res => res.json())
             .then(result => { 
-                if(result.success) { 
+                if(result.details) { 
                     updateDetailsView(result); 
                     resetIngredientForm(); 
                 } else {

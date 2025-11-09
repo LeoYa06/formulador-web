@@ -578,6 +578,48 @@ def update_user_ingredient_route(ingredient_id):
     except Exception as e:
         print(f"Error en update_user_ingredient_route: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+    
+@app.route('/api/bibliografia/<int:entry_id>/update', methods=['POST'])
+@login_required
+def update_bibliografia_route(entry_id):
+    """Actualiza una entrada de la bibliografía."""
+    try:
+        data = request.get_json()
+        titulo = data.get('titulo')
+        tipo = data.get('tipo')
+        contenido = data.get('contenido')
+
+        if not all([titulo, tipo, contenido]):
+            return jsonify({'success': False, 'error': 'Faltan datos.'}), 400
+
+        # Llamamos a la función de la base de datos
+        success = database.update_bibliografia_entry(entry_id, titulo, tipo, contenido)
+        
+        if success:
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': 'No se pudo actualizar la entrada.'}), 404
+            
+    except Exception as e:
+        print(f"Error en update_bibliografia_route: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/bibliografia/<int:entry_id>/delete', methods=['POST'])
+@login_required
+def delete_bibliografia_route(entry_id):
+    """Elimina una entrada de la bibliografía."""
+    try:
+        # Llamamos a la función de la base de datos
+        success = database.delete_bibliografia_entry(entry_id)
+        
+        if success:
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': 'No se pudo eliminar la entrada.'}), 404
+            
+    except Exception as e:
+        print(f"Error en delete_bibliografia_route: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route("/api/chat", methods=['POST'])
 @login_required

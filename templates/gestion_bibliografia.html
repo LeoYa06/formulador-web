@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Gestión de Bibliografía - ELMEfood</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -160,6 +161,7 @@
     </div>
 
     <script>
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         const tableBody = document.querySelector("#bibliografia-table tbody");
         const biblioForm = document.getElementById('bibliografia-form');
         const formTitle = document.getElementById('form-title');
@@ -219,7 +221,7 @@
 
         function deleteEntry(id, titulo) {
             if (!confirm(`¿Estás seguro de que quieres eliminar "${titulo}"?`)) return;
-            fetch(`/api/bibliografia/${id}/delete`, { method: 'POST' })
+            fetch(`/api/bibliografia/${id}/delete`, { method: 'POST', headers: { 'X-CSRFToken': csrfToken } })
                 .then(res => res.json())
                 .then(result => {
                     if (result.success) {
@@ -247,7 +249,7 @@
 
             fetch(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                 body: JSON.stringify(entryData)
             })
             .then(res => res.json())
