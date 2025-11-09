@@ -533,28 +533,6 @@ def add_bibliografia_route():
         print(f"Error en add_bibliografia_route: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500 
 
-@app.route('/api/ingredientes/<int:ingredient_id>/delete', methods=['POST'])
-@login_required
-def delete_user_ingredient_route(ingredient_id):
-    try:
-        user_id = current_user.id
-        
-        # Llamamos a la función que ya existe en database.py
-        result_status = database.delete_user_ingredient(ingredient_id, user_id)
-        
-        # Devolvemos una respuesta JSON basada en el resultado
-        if result_status == 'success':
-            return jsonify({'success': True})
-        elif result_status == 'in_use':
-            # 409 Conflict - no se puede borrar porque está en uso
-            return jsonify({'success': False, 'error': 'Este ingrediente está en uso en una o más fórmulas y no puede ser eliminado.'}), 409
-        else: # 'not_found'
-            return jsonify({'success': False, 'error': 'Ingrediente no encontrado.'}), 404
-            
-    except Exception as e:
-        print(f"Error en delete_user_ingredient_route: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-    
 @app.route('/api/bibliografia/<int:entry_id>/update', methods=['POST'])
 @login_required
 def update_bibliografia_route(entry_id):
