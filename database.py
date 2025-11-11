@@ -783,6 +783,52 @@ def delete_bibliografia_entry(entry_id: int) -> bool:
         log.error(f"Error en delete_bibliografia_entry: {e}")
         return False
 
+def search_bibliografia(query, max_results=5):
+    """
+    Busca en la bibliografía títulos o contenidos que coincidan con la consulta.
+    Usa LIKE para una búsqueda simple y devuelve un número limitado de resultados.
+
+    Args:
+        query (str): El término de búsqueda (ej. la pregunta del usuario).
+        max_results (int): El número máximo de resultados a devolver.
+    
+    Returns:
+        list: Una lista de diccionarios, donde cada dict es una entrada de bibliografía.
+    """
+    conn = None
+    try:
+        # Asumo que ya tienes una función 'get_db_connection' en tu database.py
+        conn = get_db_connection() 
+        
+        # Preparamos el término de búsqueda para que SQL 'LIKE' funcione
+        # %query% significa que busca el término "query" en cualquier parte del texto
+        search_term = f"%{query}%"
+        
+        # Ejecutamos la consulta. Buscamos tanto en 'titulo' como en 'contenido'.
+        # Usamos 'LIMIT ?' para obtener solo los 'max_results' (ej. 5) más relevantes.
+        results = conn.execute(
+            """
+            SELECT titulo, tipo, contenido FROM bibliografia
+            WHERE titulo LIKE ? OR contenido LIKE ?
+            LIMIT ?
+            """,
+            (search_term, search_term, max_results)
+        ).fetchall()
+        
+        # Convertimos los resultados (que son filas de la BD) a una lista de diccionarios
+        # Esto es clave para que 'jsonify' en app.py funcione correctamente
+        return [dict(row) for row in results]
+    
+    except Exception as e:
+        # Si algo falla (ej. la tabla no existe), imprimimos el error y devolvemos una lista vacía
+        print(f"ERROR en search_bibliografia: {e}")
+        return []
+    
+    finally:
+        # Nos aseguramos de cerrar la conexión a la BD
+        if conn:
+            conn.close()
+
 # --- Funciones de Sesión ---
 @retry_on_connection_error()
 def update_session_token(user_id, token):

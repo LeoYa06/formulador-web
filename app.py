@@ -569,7 +569,6 @@ def chat_with_ai():
     if not client:
         return jsonify({'answer': 'Error: La API de IA no está configurada.'}), 500
 
-    # Verificar y manejar la expiración de créditos antes de chatear
     current_credits = database.check_and_handle_credit_expiration(current_user.id)
     if current_credits <= 0:
         return jsonify({'answer': 'No tienes créditos suficientes. Por favor, recarga para continuar.'}), 402
@@ -577,42 +576,52 @@ def chat_with_ai():
     data = request.json
     user_question = data.get('question')
     
+    # NO PEDIMOS HISTORIAL (como tú querías)
+
     if not user_question:
         return jsonify({'answer': 'No se recibió ninguna pregunta.'}), 400
 
-    bibliografia_entries = database.get_all_bibliografia()
+    # ✅ SOLUCIÓN AL ERROR: Buscamos solo bibliografía RELEVANTE
+    # Necesitarás crear esta función 'search_bibliografia' en database.py
+    try:
+        relevant_entries = database.search_bibliografia(user_question)
+    except Exception as e:
+        print(f"Error al buscar en la bibliografía: {e}")
+        relevant_entries = []
+
+    # Construimos el contexto solo con las entradas relevantes (máx 5-10)
     contexto_bibliografico = "\n\n".join([
         f"**Título:** {entry['titulo']}\n"
         f"**Tipo:** {entry['tipo']}\n"
         f"**Contenido:** {entry['contenido']}"
-        for entry in bibliografia_entries
+        for entry in relevant_entries # Asumiendo que tu search_bibliografia limita los resultados
     ])
 
+    if not contexto_bibliografico:
+        contexto_bibliografico = "No se encontró información relevante en la bibliografía interna para esta pregunta."
+
     system_prompt = f"""
-Eres un asistente experto en tecnología de alimentos y formulación de productos. Tu tarea es responder a las preguntas del usuario de la forma más completa y actualizada posible.
+Eres un asistente experto en tecnología de alimentos y formulación de productos. Responde a la pregunta del usuario.
 
-Para ello, debes combinar información de tres fuentes:
-1.  **La Bibliografía Interna:** Este es tu principal punto de partida. Úsala para obtener información de base y contexto específico de la empresa.
-2.  **Tu Conocimiento General como IA:** Complementa la información de la bibliografía con tu conocimiento profundo sobre el tema.
-3.  **Simulación de Búsqueda Web:** Imagina que has realizado una búsqueda en tiempo real en Google sobre el tema. Incorpora en tu respuesta las últimas tendencias, investigaciones o noticias que encontrarías.
-
-**Proceso de Respuesta:**
-- Comienza con la información de la bibliografía si es relevante.
-- Enriquece la respuesta con tu conocimiento general.
-- Finaliza añadiendo los hallazgos más recientes que una búsqueda web proporcionaría, indicando que son "tendencias recientes" o "información actualizada".
-
---- INICIO DE LA BIBLIOGRAFÍA ---
+Usa la siguiente bibliografía interna como contexto principal si es relevante.
+--- INICIO DE LA BIBLIOGRAFÍA RELEVANTE ---
 {contexto_bibliografico}
---- FIN DE LA BIBLIOGRAFÍA ---
+--- FIN DE LA BIBLIOGRAFÍA RELEVANTE ---
+
+Responde a la pregunta del usuario:
 """
+
+    # ✅ LÓGICA SIN HISTORIAL:
+    # Creamos una lista de mensajes solo con el sistema y la pregunta actual
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_question}
+    ]
 
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_question}
-            ]
+            messages=messages # Enviamos la lista simple
         )
         ai_answer = response.choices[0].message.content
         database.decrement_user_credits(current_user.id, 1)
