@@ -7,6 +7,7 @@ import decimal
 import logging 
 import time
 import atexit
+import re
 from functools import wraps
 from contextlib import contextmanager 
 from werkzeug.security import generate_password_hash, check_password_hash
