@@ -783,49 +783,81 @@ def delete_bibliografia_entry(entry_id: int) -> bool:
         log.error(f"Error en delete_bibliografia_entry: {e}")
         return False
 
+import re # Asegúrate de tener 'import re' al principio de tu database.py
+
 def search_bibliografia(query, max_results=5):
     """
     Busca en la bibliografía títulos o contenidos que coincidan con la consulta.
-    Usa LIKE para una búsqueda simple y devuelve un número limitado de resultados.
-
-    Args:
-        query (str): El término de búsqueda (ej. la pregunta del usuario).
-        max_results (int): El número máximo de resultados a devolver.
-    
-    Returns:
-        list: Una lista de diccionarios, donde cada dict es una entrada de bibliografía.
+    Esta versión es más inteligente:
+    1. Limpia la consulta (saca palabras comunes).
+    2. Califica los resultados basándose en cuántas palabras clave coinciden.
+    3. Devuelve los resultados con mayor puntuación (más relevantes).
     """
+    
+    # 1. Definir "palabras vacías" (palabras comunes que no aportan a la búsqueda)
+    PALABRAS_VACIAS = set([
+        'a', 'al', 'con', 'de', 'del', 'dame', 'como', 'cual', 'el', 'ella', 'ellos', 'en', 
+        'es', 'esta', 'este', 'para', 'por', 'que', 'quien', 'la', 'las', 'le', 'lo', 
+        'los', 'mas', 'me', 'mi', 'o', 'pero', 'se', 'si', 'su', 'tu', 'un', 'una', 
+        'uno', 'y', 'ya', 'valor', 'optimo', 'sobre', 'dime', 'info', 'informacion'
+    ])
+
+    # 2. Limpiar la consulta y extraer palabras clave
+    # 're.sub' quita puntuación, 'lower()' la hace minúscula
+    texto_limpio = re.sub(r'[^\w\s]', '', query.lower())
+    # 'split()' la divide en palabras
+    palabras = texto_limpio.split()
+    
+    # Filtramos las palabras vacías, nos quedamos solo con las clave
+    terminos_clave = [palabra for palabra in palabras if palabra not in PALABRAS_VACIAS and len(palabra) > 2]
+    
+    if not terminos_clave:
+        # Si la consulta solo tenía palabras vacías, devolvemos nada
+        return []
+
+    # 3. Construir una consulta SQL dinámica que califica por relevancia
     conn = None
     try:
-        # Asumo que ya tienes una función 'get_db_connection' en tu database.py
-        conn = get_db_connection() 
+        conn = get_db_connection()
         
-        # Preparamos el término de búsqueda para que SQL 'LIKE' funcione
-        # %query% significa que busca el término "query" en cualquier parte del texto
-        search_term = f"%{query}%"
+        # 'score_parts' tendrá: "(CASE WHEN (titulo LIKE ? OR contenido LIKE ?) THEN 1 ELSE 0 END)"
+        # por cada palabra clave.
+        score_parts = []
+        params = []
         
-        # Ejecutamos la consulta. Buscamos tanto en 'titulo' como en 'contenido'.
-        # Usamos 'LIMIT ?' para obtener solo los 'max_results' (ej. 5) más relevantes.
-        results = conn.execute(
-            """
-            SELECT titulo, tipo, contenido FROM bibliografia
-            WHERE titulo LIKE ? OR contenido LIKE ?
+        for term in terminos_clave:
+            term_like = f"%{term}%"
+            score_parts.append("(CASE WHEN (titulo LIKE ? OR contenido LIKE ?) THEN 1 ELSE 0 END)")
+            params.append(term_like)
+            params.append(term_like)
+
+        # Construimos la consulta final
+        # 1. Sumamos todos los 'CASE' para obtener un 'score' (puntuación)
+        # 2. Seleccionamos solo los que tienen score > 0 (al menos 1 coincidencia)
+        # 3. Ordenamos por score DESC (los más relevantes primero)
+        # 4. Limitamos los resultados
+        
+        query_sql = f"""
+            SELECT titulo, tipo, contenido, ({" + ".join(score_parts)}) AS score
+            FROM bibliografia
+            WHERE score > 0
+            ORDER BY score DESC
             LIMIT ?
-            """,
-            (search_term, search_term, max_results)
-        ).fetchall()
+        """
         
-        # Convertimos los resultados (que son filas de la BD) a una lista de diccionarios
-        # Esto es clave para que 'jsonify' en app.py funcione correctamente
+        # Añadimos el 'LIMIT' a la lista de parámetros
+        params.append(max_results)
+        
+        # Ejecutamos la consulta
+        results = conn.execute(query_sql, tuple(params)).fetchall()
+        
+        # Devolvemos los resultados como diccionarios
         return [dict(row) for row in results]
-    
+
     except Exception as e:
-        # Si algo falla (ej. la tabla no existe), imprimimos el error y devolvemos una lista vacía
-        print(f"ERROR en search_bibliografia: {e}")
+        print(f"ERROR en search_bibliografia (versión avanzada): {e}")
         return []
-    
     finally:
-        # Nos aseguramos de cerrar la conexión a la BD
         if conn:
             conn.close()
 
