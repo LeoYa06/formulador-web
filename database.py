@@ -123,6 +123,7 @@ def retry_on_connection_error(retries=3, delay=1):
     return decorator
 
 # --- ¡NUEVO! GESTOR DE CONTEXTO CON REINTENTO ---
+
 @contextmanager
 def get_db_connection_context():
     """
@@ -132,36 +133,57 @@ def get_db_connection_context():
     conn = None
     retries = 3
     delay = 1
+    last_exception = None # Para guardar la última excepción del bucle
+
+    # --- PARTE 1: Bucle de ADQUISICIÓN ---
+    # Este bucle SÓLO intenta obtener la conexión.
     for attempt in range(retries):
         try:
             conn = get_db_connection()
             if conn is None:
                 raise psycopg2.OperationalError("No se pudo obtener una conexión del pool (None).")
             
-            yield conn # Proporciona la conexión al bloque 'with'
-            
-            # Si salimos del 'yield' sin error, rompemos el bucle
+            # ¡Éxito! Rompemos el bucle de reintentos.
             break 
-            
+        
         except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
             log.warning(f"Error al obtener conexión del pool (intento {attempt + 1}/{retries}): {e}")
-            if conn:
-                # Si obtuvimos una conexión pero falló antes del yield
-                release_db_connection(conn)
-                conn = None # Para que no se libere en el finally
+            last_exception = e # Guardamos la excepción
             
             if attempt + 1 == retries:
                 log.error(f"Error final al obtener conexión del pool después de {retries} intentos.")
-                raise # Re-lanza la última excepción
+                raise last_exception # Re-lanza la última excepción del bucle
+            
             time.sleep(delay * (2 ** attempt)) # Espera exponencial
-        
-        except Exception as e:
-            log.error(f"Error inesperado en el gestor de contexto de la DB: {e}")
-            raise # Re-lanza la excepción
-        finally:
-            if conn:
-                # Esto se ejecuta si el 'yield' fue exitoso
+    
+    # Si 'conn' sigue siendo None después del bucle, algo falló (aunque el 'raise' ya debería haberlo cubierto)
+    if conn is None:
+        if last_exception:
+            raise last_exception
+        else:
+            raise Exception("Error desconocido al obtener la conexión de la BD después de los reintentos.")
+
+    # --- PARTE 2: Bloque de USO y LIBERACIÓN ---
+    # Este try/finally está FUERA del bucle.
+    # Se ejecuta solo si la Parte 1 fue exitosa.
+    try:
+        # 1. Proporciona la conexión al bloque 'with'
+        yield conn
+    
+    finally:
+        # 2. Esto se ejecuta SIEMPRE después de que el bloque 'with' termine
+        #    (ya sea por éxito o por un error DENTRO del 'with')
+        if conn:
+            try:
                 release_db_connection(conn)
+                # log.debug("Conexión liberada de vuelta al pool.") # Opcional: log de éxito
+            except Exception as e:
+                # ¡MUY IMPORTANTE!
+                # Registramos el error pero NO relanzamos (raise)
+                # Si relanzamos, ocultaríamos el error original del bloque 'with'
+                log.error(f"¡Error CRÍTICO al liberar la conexión {conn}! {e}")
+                # A pesar del error, la conexión probablemente se cerrará/perderá,
+                # pero al menos no rompemos el generador.
 
 # --- ¡NUEVO! FUNCIONES DE MONITOREO Y CIERRE ---
 def check_pool_health():
