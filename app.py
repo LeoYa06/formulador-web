@@ -563,7 +563,7 @@ def delete_bibliografia_route(entry_id):
         print(f"Error en delete_bibliografia_route: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route("/api/chat", methods=['POST'])
+@app.route("/chat", methods=['POST'])
 @login_required
 def chat_with_ai():
     if not client:
