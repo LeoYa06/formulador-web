@@ -1,7 +1,7 @@
 import os
 import psycopg2
 import psycopg2.extras
-import psycopg2.pool
+
 import datetime
 import decimal
 import logging 
@@ -55,50 +55,36 @@ if DATABASE_URL and 'sslmode' not in DATABASE_URL and 'localhost' not in DATABAS
 
 log.info(f"Conectando a la URL de la base de datos: {DATABASE_URL[:30]}...") 
 
-# --- CREACIÓN DEL POOL DE CONEXIONES ---
-try:
-    db_pool = psycopg2.pool.SimpleConnectionPool(
-        1,  # minconn
-        10, # maxconn
-        dsn=DATABASE_URL
-    )
-    log.info("Pool de conexiones de base de datos creado exitosamente.")
-except Exception as e:
-    log.error(f"FATAL: No se pudo crear el pool de conexiones. {e}")
-    db_pool = None
+# --- ¡EL POOL DE CONEXIONES HA SIDO ELIMINADO! ---
+# La variable global 'db_pool' ya no existe.
+# PgBouncer (en Supabase) se encargará del pooling.
 
 def get_db_connection():
     """
-    Obtiene una conexión del POOL.
-    Lanza una excepción si el pool no está disponible.
+    Crea una NUEVA conexión directa a la base de datos.
+    PgBouncer (Supabase) se encargará de esto eficientemente.
     """
-    global db_pool
-    if db_pool is None:
-        log.error("El pool de conexiones no está inicializado. Intentando recrear...")
-        try:
-            db_pool = psycopg2.pool.SimpleConnectionPool(1, 10, dsn=DATABASE_URL)
-            log.info("Pool de conexiones recreado exitosamente.")
-        except Exception as e:
-            log.error(f"ERROR CRÍTICO: No se pudo recrear el pool de conexiones. {e}")
-            raise psycopg2.OperationalError(f"No se pudo recrear el pool: {e}")
-            
     try:
-        conn = db_pool.getconn()
-        log.debug("Conexión obtenida del pool.")
+        # log.debug("Creando nueva conexión a la BD...")
+        conn = psycopg2.connect(DATABASE_URL)
         return conn
-    except Exception as e:
-        log.error(f"ERROR: No se pudo obtener conexión del pool. {e}")
-        raise psycopg2.OperationalError(f"No se pudo obtener conexión del pool: {e}")
-
+    except psycopg2.OperationalError as e:
+        log.error(f"FATAL: No se pudo crear una nueva conexión a la BD: {e}")
+        # El contextmanager (get_db_connection_context) manejará este None
+        # y lo reintentará.
+        raise # Relanzamos para que el contextmanager lo atrape
 
 def release_db_connection(conn):
     """
-    Devuelve una conexión al POOL.
+    CIERRA la conexión de la base de datos.
     """
-    global db_pool
-    if db_pool and conn:
-        log.debug("Devolviendo conexión al pool.")
-        db_pool.putconn(conn)
+    if conn:
+        try:
+            # log.debug("Cerrando conexión a la BD.")
+            conn.close()
+        except Exception as e:
+            log.warning(f"Error al cerrar la conexión a la BD: {e}")
+            # No hacemos 'raise' para no ocultar un error original
 
 # --- ¡NUEVO! DECORADOR DE REINTENTO ---
 def retry_on_connection_error(retries=3, delay=1):
