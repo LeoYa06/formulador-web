@@ -10,3 +10,5 @@ openpyxl==3.1.5
 httpx==0.28.1
 certifi==2025.7.14
 SQLAlchemy==2.0.43
+gevent==23.10.2
+zope.interface
