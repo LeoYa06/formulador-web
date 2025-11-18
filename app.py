@@ -34,6 +34,18 @@ stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
 stripe_price_id = os.getenv('STRIPE_PRICE_ID')
 stripe_webhook_secret = os.getenv('STRIPE_WEBHOOK_SECRET')
 
+try:
+    database.initialize_connection_pool()
+    print("✅ Pool de conexiones inicializado correctamente")
+except Exception as e:
+    print(f"❌ ERROR CRÍTICO: No se pudo inicializar el pool de conexiones: {e}")
+
+try:
+    database.initialize_database()
+    print("✅ Base de datos inicializada correctamente")
+except Exception as e:
+    print(f"⚠️ Advertencia al inicializar la base de datos: {e}")
+
 # Verificar y sanear la clave de API
 api_key_raw = os.getenv('OPENAI_API_KEY')
 client = None # Inicializar cliente como None

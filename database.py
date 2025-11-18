@@ -1,7 +1,7 @@
 import os
 import psycopg2
 import psycopg2.extras
-
+import psycopg2.pool
 import datetime
 import decimal
 import logging 
@@ -48,43 +48,64 @@ def convert_row_to_dict(row):
 # --- Configuración para PostgreSQL ---
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# --- Forzar SSL para entornos de producción como Render ---
 if DATABASE_URL and 'sslmode' not in DATABASE_URL and 'localhost' not in DATABASE_URL:
     DATABASE_URL += "?sslmode=require"
-    log.info("Añadiendo '?sslmode=require' a la DATABASE_URL para conexión de producción.")
+    log.info("Añadiendo '?sslmode=require' a la DATABASE_URL")
 
 log.info(f"Conectando a la URL de la base de datos: {DATABASE_URL[:30]}...") 
 
-# --- ¡EL POOL DE CONEXIONES HA SIDO ELIMINADO! ---
-# La variable global 'db_pool' ya no existe.
-# PgBouncer (en Supabase) se encargará del pooling.
+db_pool = None
+
+def initialize_connection_pool():
+    """Inicializa el pool de conexiones."""
+    global db_pool
+    try:
+        db_pool = psycopg2.pool.ThreadedConnectionPool(
+            minconn=2,      # Mínimo 2 conexiones
+            maxconn=8,      # Máximo 8 (deja margen para otras apps)
+            dsn=DATABASE_URL
+        )
+        log.info("✅ Pool de conexiones inicializado correctamente")
+        return True
+    except Exception as e:
+        log.error(f"❌ Error al inicializar el pool: {e}")
+        return False
 
 def get_db_connection():
-    """
-    Crea una NUEVA conexión directa a la base de datos.
-    PgBouncer (Supabase) se encargará de esto eficientemente.
-    """
+    """Obtiene una conexión del pool."""
+    global db_pool
+    if db_pool is None:
+        if not initialize_connection_pool():
+            raise Exception("No se pudo inicializar el pool de conexiones")
+    
     try:
-        # log.debug("Creando nueva conexión a la BD...")
-        conn = psycopg2.connect(DATABASE_URL)
-        return conn
-    except psycopg2.OperationalError as e:
-        log.error(f"FATAL: No se pudo crear una nueva conexión a la BD: {e}")
-        # El contextmanager (get_db_connection_context) manejará este None
-        # y lo reintentará.
-        raise # Relanzamos para que el contextmanager lo atrape
+        conn = db_pool.getconn()
+        if conn:
+            return conn
+        else:
+            raise psycopg2.OperationalError("Pool devolvió None")
+    except Exception as e:
+        log.error(f"Error obteniendo conexión del pool: {e}")
+        raise
 
 def release_db_connection(conn):
-    """
-    CIERRA la conexión de la base de datos.
-    """
-    if conn:
+    """Devuelve la conexión AL POOL (no la cierra)."""
+    global db_pool
+    if conn and db_pool:
         try:
-            # log.debug("Cerrando conexión a la BD.")
-            conn.close()
+            db_pool.putconn(conn)
         except Exception as e:
-            log.warning(f"Error al cerrar la conexión a la BD: {e}")
-            # No hacemos 'raise' para no ocultar un error original
+            log.warning(f"Error al devolver conexión al pool: {e}")
+
+def close_pool():
+    """Cierra todas las conexiones del pool al apagar la app."""
+    global db_pool
+    if db_pool:
+        log.info("Cerrando el pool de conexiones...")
+        db_pool.closeall()
+        db_pool = None
+
+atexit.register(close_pool)
 
 # --- ¡NUEVO! DECORADOR DE REINTENTO ---
 def retry_on_connection_error(retries=3, delay=1):
@@ -112,14 +133,26 @@ def retry_on_connection_error(retries=3, delay=1):
 
 @contextmanager
 def get_db_connection_context():
-    """
-    Gestor de contexto para obtener y liberar una conexión del pool.
-    Reintenta automáticamente si falla al *obtener* la conexión.
-    """
+    """Context manager que obtiene y devuelve conexiones al pool."""
     conn = None
     retries = 3
     delay = 1
-    last_exception = None # Para guardar la última excepción del bucle
+    
+    for attempt in range(retries):
+        try:
+            conn = get_db_connection()
+            break
+        except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+            log.warning(f"Error obteniendo conexión (intento {attempt + 1}/{retries}): {e}")
+            if attempt + 1 == retries:
+                raise
+            time.sleep(delay * (2 ** attempt))
+    
+    try:
+        yield conn
+    finally:
+        if conn:
+            release_db_connection(conn)  # ✅ Devuelve al pool, NO cierra
 
     # --- PARTE 1: Bucle de ADQUISICIÓN ---
     # Este bucle SÓLO intenta obtener la conexión.
