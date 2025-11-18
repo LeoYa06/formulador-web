@@ -12,3 +12,4 @@ certifi==2025.7.14
 SQLAlchemy==2.0.43
 gevent==22.10.2
 zope.interface
+setuptools>=68.0.0
