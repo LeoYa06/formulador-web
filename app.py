@@ -567,7 +567,7 @@ def delete_bibliografia_route(entry_id):
     except Exception as e:
         print(f"Error en delete_bibliografia_route: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
-
+'''
 @app.route("/api/chat", methods=['POST'])
 @login_required
 def chat_with_ai():
@@ -657,7 +657,7 @@ def chat_with_ai():
 
     except Exception as e:
         print(f"ERROR CHAT: {e}")
-        return jsonify({'answer': 'Ocurrió un error al procesar tu consulta.'}), 500
+        return jsonify({'answer': 'Ocurrió un error al procesar tu consulta.'}), 500'''
 
 #ruta de prueba P
 @app.route('/test-post', methods=['POST'])
