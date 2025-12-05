@@ -246,6 +246,10 @@
         </form>
     </div>
 
+    <a href="mailto:info@elmefood.com" class="help-btn">
+        <span>✉️</span> Ayuda
+    </a>
+
     <script>
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         const formulaList = document.getElementById('lista-formulas');
@@ -604,76 +608,12 @@
             }
         });
 
-        
-        
-
-        /*
-
-        document.getElementById('chat-bubble').addEventListener('click', () => {
-            const chatWindow = document.getElementById('chat-window');
-            chatWindow.style.display = chatWindow.style.display === 'none' ? 'flex' : 'none';
-        });
-
-        document.getElementById('chat-form').addEventListener('submit', function(event) {
-            event.preventDefault();
-            const chatInput = document.getElementById('chat-input');
-            const userQuestion = chatInput.value.trim();
-            
-            if (!userQuestion) return;
-            
-            appendMessage(userQuestion, 'user-message');
-            chatInput.value = '';
-            
-            const typingMessage = appendMessage('Escribiendo...', 'bot-message');
-            
-            fetch('/api/chat', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, 
-                body: JSON.stringify({ question: userQuestion }) 
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (typingMessage && typingMessage.parentNode) {
-                    typingMessage.parentNode.removeChild(typingMessage);
-                }
-                if (data.answer) {
-                    appendMessage(data.answer, 'bot-message');
-                } else {
-                    appendMessage('Error: No se recibió respuesta del servidor.', 'bot-message');
-                }
-            })
-            .catch(error => {
-                if (typingMessage && typingMessage.parentNode) {
-                    typingMessage.parentNode.removeChild(typingMessage);
-                }
-                appendMessage('Error de conexión. Inténtalo de nuevo.', 'bot-message');
-            });
-        });
-
-        function appendMessage(text, className) {
-            const chatHistory = document.getElementById('chat-history');
-            if (!chatHistory) return null;
-            
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `chat-message ${className}`;*/
-            
-            /*let formattedText = text.replace(/\*\*(.*?)\*\*/g,
-            /*'<strong>$1</strong>').replace(/\n/g, '<br>');
-            messageDiv.innerHTML = formattedText;
-            
-            chatHistory.appendChild(messageDiv);
-            chatHistory.scrollTop = chatHistory.scrollHeight;
-            return messageDiv;
-        }*/
-        
+              
         
 
         window.onload = loadFormulas;
     </script>
 
-    <a href="mailto:info@elmefood.com" class="help-btn">
-        <span>✉️</span> Ayuda
-    </a>
-
+    
 </body>
 </html>
