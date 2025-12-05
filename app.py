@@ -574,42 +574,72 @@ def chat_with_ai():
     if not client:
         return jsonify({'answer': 'Error: La API de IA no está configurada.'}), 500
 
-    # Verificar y manejar la expiración de créditos antes de chatear
+    # Verificar créditos
     current_credits = database.check_and_handle_credit_expiration(current_user.id)
     if current_credits <= 0:
-        return jsonify({'answer': 'No tienes créditos suficientes. Por favor, recarga para continuar.'}), 402
+        return jsonify({'answer': 'No tienes créditos suficientes.'}), 402
 
     data = request.json
-    user_question = data.get('question')
+    user_question = data.get('question', '').strip()
     
     if not user_question:
-        return jsonify({'answer': 'No se recibió ninguna pregunta.'}), 400
+        return jsonify({'answer': 'Por favor escribe una pregunta.'}), 400
 
-    bibliografia_entries = database.get_all_bibliografia()
-    contexto_bibliografico = "\n\n".join([
-        f"**Título:** {entry['titulo']}\n"
-        f"**Tipo:** {entry['tipo']}\n"
-        f"**Contenido:** {entry['contenido']}"
-        for entry in bibliografia_entries
+    # 1. Obtener toda la bibliografía
+    all_entries = database.get_all_bibliografia()
+
+    # 2. FILTRADO INTELIGENTE (Buscador Básico)
+    # Buscamos coincidencias de palabras clave para no enviar todo el texto a la IA
+    query_words = user_question.lower().split()
+    relevant_entries = []
+
+    for entry in all_entries:
+        score = 0
+        # Convertimos a minúsculas para buscar
+        title_text = entry['titulo'].lower()
+        content_text = entry['contenido'].lower()
+        
+        # Sistema de puntos simple:
+        # Si la palabra está en el título: 3 puntos
+        # Si está en el contenido: 1 punto
+        for word in query_words:
+            if len(word) > 3: # Ignoramos palabras muy cortas (de, la, el...)
+                if word in title_text:
+                    score += 3
+                if word in content_text:
+                    score += 1
+        
+        if score > 0:
+            relevant_entries.append({'entry': entry, 'score': score})
+
+    # Si no encontramos nada relevante en la base de datos
+    if not relevant_entries:
+        return jsonify({'answer': 'Lo siento, no encontré información sobre ese tema en tu bibliografía interna.'})
+
+    # 3. Ordenamos por relevancia y tomamos solo el TOP 5
+    # Esto asegura que nunca excedas el límite de tokens (error 400)
+    relevant_entries.sort(key=lambda x: x['score'], reverse=True)
+    top_entries = [item['entry'] for item in relevant_entries[:5]]
+
+    # 4. Preparamos el contexto reducido
+    contexto_limpio = "\n\n".join([
+        f"--- FUENTE: {entry['titulo']} ---\n{entry['contenido']}"
+        for entry in top_entries
     ])
 
+    # 5. Prompt estricto para que NO use internet
     system_prompt = f"""
-Eres un asistente experto en tecnología de alimentos y formulación de productos. Tu tarea es responder a las preguntas del usuario de la forma más completa y actualizada posible.
+    Eres un asistente bibliotecario estricto. Tu ÚNICA fuente de verdad es el siguiente contexto proporcionado por la base de datos del usuario.
+    
+    INSTRUCCIONES:
+    1. Responde a la pregunta del usuario basándote SOLAMENTE en la información proporcionada abajo.
+    2. NO uses tu conocimiento general ni busques en internet.
+    3. Si la respuesta no está explícitamente en el texto, di: "No encontré esa información específica en la bibliografía disponible."
+    4. Sé conciso y directo.
 
-Para ello, debes combinar información de tres fuentes:
-1.  **La Bibliografía Interna:** Este es tu principal punto de partida. Úsala para obtener información de base y contexto específico de la empresa.
-2.  **Tu Conocimiento General como IA:** Complementa la información de la bibliografía con tu conocimiento profundo sobre el tema.
-3.  **Simulación de Búsqueda Web:** Imagina que has realizado una búsqueda en tiempo real en Google sobre el tema. Incorpora en tu respuesta las últimas tendencias, investigaciones o noticias que encontrarías.
-
-**Proceso de Respuesta:**
-- Comienza con la información de la bibliografía si es relevante.
-- Enriquece la respuesta con tu conocimiento general.
-- Finaliza añadiendo los hallazgos más recientes que una búsqueda web proporcionaría, indicando que son "tendencias recientes" o "información actualizada".
-
---- INICIO DE LA BIBLIOGRAFÍA ---
-{contexto_bibliografico}
---- FIN DE LA BIBLIOGRAFÍA ---
-"""
+    --- CONTEXTO DE LA BIBLIOGRAFÍA ---
+    {contexto_limpio}
+    """
 
     try:
         response = client.chat.completions.create(
@@ -617,15 +647,17 @@ Para ello, debes combinar información de tres fuentes:
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_question}
-            ]
+            ],
+            temperature=0.3 # Temperatura baja para que sea más preciso y menos "creativo"
         )
         ai_answer = response.choices[0].message.content
         database.decrement_user_credits(current_user.id, 1)
-    except Exception as e:
-        print(f"ERROR: Error al llamar a la API de OpenAI en el chat: {e}")
-        return jsonify({'answer': f'Error al contactar el servicio de IA: {e}'}), 500
+        
+        return jsonify({'answer': ai_answer})
 
-    return jsonify({'answer': ai_answer})
+    except Exception as e:
+        print(f"ERROR CHAT: {e}")
+        return jsonify({'answer': 'Ocurrió un error al procesar tu consulta.'}), 500
 
 #ruta de prueba P
 @app.route('/test-post', methods=['POST'])
