@@ -48,8 +48,13 @@ else:
         # Configurar el cliente de OpenAI
         try:
             # Pasando explícitamente la clave saneada
-            client = OpenAI(api_key=api_key, timeout=60.0)
-            print("INFO: Cliente de OpenAI configurado con la clave de API saneada.")
+            http_client = httpx.Client(http2=False)
+            client = OpenAI(
+              api_key=api_key, 
+              http_client=http_client, 
+              timeout=60.0
+             )
+            print("INFO: Cliente de OpenAI configurado (Forzando HTTP/1.1).")
         except Exception as e:
             print(f"ERROR: No se pudo configurar el cliente de OpenAI. Error: {e}")
             client = None
