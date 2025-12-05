@@ -109,7 +109,7 @@
         .btn-edit { background-color: var(--success-color); }
         .btn-delete { background-color: var(--danger-color); }
         .btn-edit, .btn-delete { padding: 5px 10px; color: white; border-radius: 4px; }
-        #chat-bubble { position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; background-color: var(--primary-color); color: var(--bg-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.2); z-index: 1000; }
+        /*#chat-bubble { position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; background-color: var(--primary-color); color: var(--bg-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.2); z-index: 1000; }*/
         #chat-window { display: none; position: fixed; bottom: 90px; right: 20px; width: 350px; height: 500px; border: 1px solid var(--border-color); border-radius: 10px; background-color: var(--card-bg); box-shadow: 0 4px 12px rgba(0,0,0,0.2); flex-direction: column; z-index: 1000; }
         #chat-history { flex-grow: 1; padding: 10px; overflow-y: auto; display: flex; flex-direction: column;}
         #chat-form { display: flex; padding: 10px; border-top: 1px solid var(--border-color); }
@@ -133,6 +133,31 @@
         width: 100% !important;
         box-sizing: border-box !important;
         margin: 0 !important;
+
+        /* Botón de Ayuda Flotante */
+        .help-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: var(--primary-color); /* Usa tu color naranja */
+            color: var(--bg-color); /* Texto oscuro para contraste */
+            padding: 12px 24px;
+            border-radius: 50px; /* Bordes redondeados */
+            text-decoration: none; /* Sin subrayado */
+            font-weight: 700;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1000;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px; /* Espacio entre el icono y el texto */
+        }
+
+        .help-btn:hover {
+            transform: translateY(-2px); /* Efecto de elevación al pasar el mouse */
+            box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+            background-color: var(--primary-hover);
+        }
 }
     </style>
 </head>
@@ -579,6 +604,9 @@
             }
         });
 
+        
+        
+
         /*
 
         document.getElementById('chat-bubble').addEventListener('click', () => {
@@ -638,8 +666,14 @@
             return messageDiv;
         }*/
         
+        
 
         window.onload = loadFormulas;
     </script>
+
+    <a href="mailto:info@elmefood.com" class="help-btn">
+        <span>✉️</span> Ayuda
+    </a>
+
 </body>
 </html>
