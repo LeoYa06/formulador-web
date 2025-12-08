@@ -66,11 +66,12 @@ login_manager.login_view = 'login'
 login_manager.login_message = "Por favor, inicia sesión para acceder a esta página."
 
 class User(UserMixin):
-    def __init__(self, id, username, full_name, is_verified=False):
+    def __init__(self, id, username, full_name, is_verified=False, is_suspended=False):
         self.id = id
         self.username = username
         self.full_name = full_name
         self.is_verified = is_verified
+        self.is_suspended = is_suspended
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -80,11 +81,39 @@ def load_user(user_id):
             id=user_data['id'],
             username=user_data['username'],
             full_name=user_data.get('full_name', ''),
-            is_verified=user_data.get('is_verified', False)
+            is_verified=user_data.get('is_verified', False),
+            is_suspended=user_data.get('is_suspended', False) # <--- Leemos de la BD
         )
     return None
 
 # --- 3. RUTAS DE AUTENTICACIÓN Y PAGO ---
+
+@app.route('/cuenta-suspendida')
+@login_required
+def payment_pending():
+    """Muestra la pantalla de bloqueo con el botón de pago."""
+    # Si por error un usuario activo entra aquí, lo mandamos al inicio
+    if not current_user.is_suspended:
+        return redirect(url_for('index'))
+    return render_template('payment_pending.html')
+
+@app.before_request
+def check_suspension():
+    """
+    Este 'portero' se ejecuta antes de CADA petición.
+    Si el usuario está suspendido, lo redirige a la página de pago
+    sin importar a dónde intentaba ir.
+    """
+    if current_user.is_authenticated and current_user.is_suspended:
+        # Lista de lugares permitidos para un usuario suspendido:
+        # 1. La página de aviso ('payment_pending')
+        # 2. La función de logout (para que pueda salir)
+        # 3. Archivos estáticos (imágenes, estilos)
+        # 4. El proceso de pago ('create_checkout_session')
+        allowed_routes = ['payment_pending', 'logout', 'static', 'create_checkout_session', 'webhook']
+        
+        if request.endpoint and request.endpoint not in allowed_routes:
+            return redirect(url_for('payment_pending'))
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():

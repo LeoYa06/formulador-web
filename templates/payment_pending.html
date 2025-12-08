@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acción Requerida - ELMEfood</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+        .container {
+            background-color: #2c2c2c;
+            padding: 40px;
+            border-radius: 12px;
+            border: 1px solid #dc3545; /* Borde rojo de alerta */
+            max-width: 500px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        h1 { color: #dc3545; margin-bottom: 20px; }
+        p { font-size: 1.1em; line-height: 1.6; color: #ccc; margin-bottom: 30px; }
+        .btn-pay {
+            background-color: #28a745; /* Verde para pagar */
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            width: 100%;
+            box-sizing: border-box;
+            transition: background-color 0.2s;
+        }
+        .btn-pay:hover { background-color: #218838; }
+        .logout-link { display: block; margin-top: 20px; color: #888; text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚠️ Cuenta con saldo pendiente</h1>
+        <p>
+            Hola <strong>{{ current_user.full_name }}</strong>,<br><br>
+            Hemos detectado un saldo pendiente en tu suscripción. 
+            Para continuar utilizando el Formulador y acceder a tus recetas, 
+            por favor regulariza tu pago.
+        </p>
+
+        <button id="checkout-button" class="btn-pay">💳 Realizar Pago Ahora</button>
+
+        <a href="{{ url_for('logout') }}" class="logout-link">Cerrar sesión por ahora</a>
+    </div>
+
+    <script type="text/javascript">
+        // Reutilizamos tu lógica de Stripe existente
+        var checkoutButton = document.getElementById('checkout-button');
+        checkoutButton.addEventListener('click', function () {
+            checkoutButton.innerText = "Procesando...";
+            checkoutButton.disabled = true;
+            
+            fetch('/create-checkout-session', {
+                method: 'POST',
+            })
+            .then(function (response) {
+                return response.json();
+            })
+            .then(function (session) {
+                if (session.error) {
+                    alert(session.error);
+                    checkoutButton.innerText = "Intentar de nuevo";
+                    checkoutButton.disabled = false;
+                } else {
+                    return window.location.href = session.url;
+                }
+            })
+            .catch(function (error) {
+                console.error('Error:', error);
+                alert("Error de conexión");
+                checkoutButton.innerText = "Intentar de nuevo";
+                checkoutButton.disabled = false;
+            });
+        });
+    </script>
+</body>
+</html>
