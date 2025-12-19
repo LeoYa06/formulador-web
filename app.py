@@ -768,28 +768,68 @@ def analyze_formula_route(formula_id):
                 print(f"ERROR ARGS: {e.args}")
                 print(f"ERROR: Error al llamar a la API de OpenAI: {e}")
                 return jsonify({'analysis': f'Error al contactar el servicio de IA: {e}'}), 500
+# --- PEGAR ESTO AL FINAL DE TU APP.PY PARA ACTIVAR EL LINK MANUAL ---
 
-@app.route('/api/change-password', methods=['POST'])
-@login_required
-def change_password():
-    data = request.get_json()
-    current_password = data.get('current_password')
-    new_password = data.get('new_password')
+@app.route('/recuperar/<token>', methods=['GET', 'POST'])
+def reset_password_page(token):
+    import psycopg2.extras
+    from werkzeug.security import generate_password_hash
+    
+    # 1. Buscar si existe un usuario con ese token
+    conn = database.get_db_connection()
+    user = None
+    try:
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cur.execute("SELECT * FROM users WHERE reset_token = %s", (token,))
+        user = cur.fetchone()
+    except Exception as e:
+        print(f"Error buscando token: {e}")
+    finally:
+        database.release_db_connection(conn)
 
-    if not current_password or not new_password:
-        return jsonify({'success': False, 'error': 'Faltan datos.'}), 400
+    if not user:
+        return "Este enlace es inválido o ya fue utilizado (Error 404).", 404
 
-    # 1. Verificar que la contraseña actual (temporal) sea correcta
-    # Necesitamos traer el hash actual de la BD
-    user_data = database.get_user_by_id(current_user.id)
-    if not user_data or not check_password_hash(user_data['password_hash'], current_password):
-        return jsonify({'success': False, 'error': 'La contraseña actual es incorrecta.'}), 403
+    # 2. Si es POST, es que el usuario envió la nueva contraseña
+    if request.method == 'POST':
+        new_pass = request.form.get('password')
+        if not new_pass:
+            return "La contraseña no puede estar vacía."
+        
+        # Generar hash y guardar
+        new_hash = generate_password_hash(new_pass)
+        
+        try:
+            conn = database.get_db_connection()
+            cur = conn.cursor()
+            # Actualizamos contraseña Y borramos el token para que no se use dos veces
+            cur.execute("UPDATE users SET password_hash = %s, reset_token = NULL WHERE id = %s", (new_hash, user['id']))
+            conn.commit()
+            database.release_db_connection(conn)
+            
+            # Mensaje de éxito simple con enlace al login
+            return """
+            <div style="text-align:center; font-family:sans-serif; margin-top:50px;">
+                <h2 style="color:green;">¡Contraseña actualizada correctamente!</h2>
+                <p>Ya puedes iniciar sesión con tu nueva clave.</p>
+                <a href="/login" style="background:#fca311; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;">Ir al Login</a>
+            </div>
+            """
+        except Exception as e:
+            return f"Error al guardar: {e}"
 
-    # 2. Generar hash de la nueva contraseña
-    new_hash = generate_password_hash(new_password)
-
-    # 3. Guardar en BD
-    if database.update_user_password(current_user.id, new_hash):
-        return jsonify({'success': True})
-    else:
-        return jsonify({'success': False, 'error': 'Error al guardar en la base de datos.'}), 500
+    # 3. Si es GET, mostramos el formulario
+    return f"""
+    <html>
+        <body style="font-family:sans-serif; background:#f4f4f4; padding:50px; text-align:center;">
+            <div style="background:white; max-width:400px; margin:0 auto; padding:30px; border-radius:10px; box-shadow:0 0 10px rgba(0,0,0,0.1);">
+                <h2 style="color:#333;">Restablecer Contraseña</h2>
+                <p>Hola <strong>{user.get('username', 'Usuario')}</strong></p>
+                <form method="POST">
+                    <input type="password" name="password" placeholder="Escribe tu nueva contraseña" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ddd; border-radius:5px;" required>
+                    <button type="submit" style="width:100%; padding:10px; background:#fca311; color:white; border:none; border-radius:5px; font-weight:bold; cursor:pointer;">Guardar Nueva Contraseña</button>
+                </form>
+            </div>
+        </body>
+    </html>
+    """
