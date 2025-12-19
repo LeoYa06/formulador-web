@@ -771,6 +771,7 @@ def analyze_formula_route(formula_id):
 # --- PEGAR ESTO AL FINAL DE TU APP.PY PARA ACTIVAR EL LINK MANUAL ---
 
 @app.route('/recuperar/<token>', methods=['GET', 'POST'])
+@csrf.exempt
 def reset_password_page(token):
     import psycopg2.extras
     from werkzeug.security import generate_password_hash
