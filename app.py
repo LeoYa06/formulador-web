@@ -8,7 +8,7 @@ import stripe
 from datetime import datetime, timedelta
 from flask import session
 from flask import Flask, render_template, jsonify, request, flash, redirect, url_for
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_wtf.csrf import CSRFProtect
@@ -769,4 +769,27 @@ def analyze_formula_route(formula_id):
                 print(f"ERROR: Error al llamar a la API de OpenAI: {e}")
                 return jsonify({'analysis': f'Error al contactar el servicio de IA: {e}'}), 500
 
-# ... (resto del archivo sin cambios)
+@app.route('/api/change-password', methods=['POST'])
+@login_required
+def change_password():
+    data = request.get_json()
+    current_password = data.get('current_password')
+    new_password = data.get('new_password')
+
+    if not current_password or not new_password:
+        return jsonify({'success': False, 'error': 'Faltan datos.'}), 400
+
+    # 1. Verificar que la contraseña actual (temporal) sea correcta
+    # Necesitamos traer el hash actual de la BD
+    user_data = database.get_user_by_id(current_user.id)
+    if not user_data or not check_password_hash(user_data['password_hash'], current_password):
+        return jsonify({'success': False, 'error': 'La contraseña actual es incorrecta.'}), 403
+
+    # 2. Generar hash de la nueva contraseña
+    new_hash = generate_password_hash(new_password)
+
+    # 3. Guardar en BD
+    if database.update_user_password(current_user.id, new_hash):
+        return jsonify({'success': True})
+    else:
+        return jsonify({'success': False, 'error': 'Error al guardar en la base de datos.'}), 500

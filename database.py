@@ -902,3 +902,17 @@ def seed_initial_ingredients(user_id):
     except Exception as e:
         log.error(f"Error general en seed_initial_ingredients: {e}")
         return False
+    
+@retry_on_connection_error()
+def update_user_password(user_id: int, new_password_hash: str) -> bool:
+    """Actualiza la contraseña del usuario."""
+    sql = "UPDATE users SET password_hash = %s WHERE id = %s"
+    try:
+        with get_db_connection_context() as conn:
+            with conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(sql, (new_password_hash, user_id))
+                    return cursor.rowcount > 0
+    except Exception as e:
+        log.error(f"Error actualizando contraseña usuario {user_id}: {e}")
+        return False
